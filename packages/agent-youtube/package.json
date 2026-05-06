@@ -1,0 +1,33 @@
+{
+  "name": "agent-youtube",
+  "version": "0.1.0",
+  "description": "CLI for YouTube Shorts automation with feedback loop support",
+  "type": "module",
+  "bin": {
+    "agent-youtube": "./bin/agent-youtube.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "youtube",
+    "shorts",
+    "cli",
+    "agent",
+    "automation"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^13.1.0",
+    "googleapis": "^144.0.0",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

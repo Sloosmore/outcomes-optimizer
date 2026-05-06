@@ -1,0 +1,31 @@
+campaign:
+  name: first-test
+database:
+  adapter: cloud
+cli:
+  adapter: claude-agent-sdk  # rollback: change to `adapter: claude-code` to restore previous behavior
+  workingDir: .              # Use project directory so skills sync to .claude/skills/
+skills:
+  versioned: skills/         # Committed skills (version controlled)
+  # draft: .claude/skills/   # Optional: defaults to CLI adapter's path (e.g., .claude/skills/ for claude-code)
+identity:
+  email:
+    adapter: gmail
+    # Gmail uses OAuth credentials from env vars (GMAIL_CLIENT_ID, etc.)
+    # Address: autoloosmore@gmail.com
+  # Future identity types:
+  # phone:
+  #   adapter: twilio
+  #   number: +18447293026
+  # browser:
+  #   provider: browserbase
+  #   session_ttl: 3600
+
+# Eval configuration (optional - comment out to disable)
+eval:
+  run_name: image-to-pptx-v1
+  data:
+    type: cloud
+  loop:
+    enabled: true
+    max_epochs: 20

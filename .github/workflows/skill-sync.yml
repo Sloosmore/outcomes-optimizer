@@ -1,0 +1,57 @@
+name: Sync Skills to Supabase
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'skills/**'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    continue-on-error: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Detect changed skills
+        id: changed_skills
+        run: |
+          CHANGED=$(git diff HEAD~1 --name-only | grep '^skills/' | awk -F/ '{print $2}' | sort -u | tr '\n' ' ' | xargs)
+          echo "skills=$CHANGED" >> $GITHUB_OUTPUT
+          if [ -n "$CHANGED" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install dependencies
+        if: steps.changed_skills.outputs.has_changes == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build database package dependencies
+        if: steps.changed_skills.outputs.has_changes == 'true'
+        run: pnpm --filter @skill-networks/database^... build
+
+      - name: Build database package
+        if: steps.changed_skills.outputs.has_changes == 'true'
+        run: pnpm --filter @skill-networks/database build
+
+      - name: Publish skills
+        if: steps.changed_skills.outputs.has_changes == 'true'
+        run: npx tsx scripts/publish-skills.ts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

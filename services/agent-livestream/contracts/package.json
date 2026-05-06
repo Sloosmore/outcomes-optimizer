@@ -1,0 +1,18 @@
+{
+  "name": "@skill-networks/contracts",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
+  "exports": {
+    "./*": "./dist/*.js"
+  },
+  "dependencies": {
+    "@skill-networks/agent-events": "workspace:*"
+  },
+  "peerDependencies": {
+    "zod": ">=3"
+  }
+}

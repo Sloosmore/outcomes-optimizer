@@ -1,0 +1,51 @@
+name: Database Migrations
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'packages/database/rls.sql'
+  workflow_dispatch: # allow manual trigger and trigger from auto-merge
+
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Apply migrations
+        run: |
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "--- Applying $(basename "$f") ---"
+            psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f "$f"
+          done
+          echo "All migrations applied."
+
+      # RLS step uses tsx — set up Node/pnpm only after migrations have been
+      # applied, so the much cheaper migration step fails fast without waiting
+      # on a Node toolchain that isn't needed for it.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply RLS policies
+        run: pnpm run db:rls

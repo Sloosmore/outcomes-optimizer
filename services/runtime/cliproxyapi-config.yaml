@@ -1,0 +1,9 @@
+# CLIProxyAPI config — schema compatible with v6.9.18+
+# This config is for the container-local proxy (port 8317 is not exposed to the host network).
+# Production deployments use an environment-specific bearer token, not this placeholder.
+port: 8317
+auth-dir: "/opt/cliproxyapi/auths"
+api-keys:
+  - "dummy-key-accept-all"  # Container-local only; real Anthropic credentials live in auths/ dir
+routing:
+  strategy: "random"  # Random distribution across configured backends

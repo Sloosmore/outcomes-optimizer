@@ -1,0 +1,81 @@
+---
+title: "agent-interceptor"
+description: "Credential injection proxy that intercepts API calls from agent packages."
+---
+
+## Purpose
+
+A proxy service that sits between agent packages and external APIs. It intercepts outbound requests and injects credentials, API tokens, and routing configuration — without the calling package being aware.
+
+## Architecture
+
+```
+agent-instagram → fetch('https://graph.facebook.com/...') → [interceptor] → Meta API
+                                                                  ↑
+                                                    credential injection
+                                                    + IP/proxy selection
+```
+
+The interceptor is invisible to `agent-instagram`. Both work identically with or without the other.
+
+## Responsibilities
+
+| Responsibility | Notes |
+|---|---|
+| Credential injection | Injects API tokens, OAuth headers |
+| IP / proxy selection | Each Instagram account uses a consistent geographic IP |
+| Request logging | Optional audit trail |
+| Agent event routing | Routes events to main or sub-agent sessions |
+
+## IP Selection Requirement
+
+Instagram accounts must connect from consistent geographic IPs to avoid suspension. IP selection belongs in the interceptor layer — not in `agent-instagram` or the instagrapi adapter.
+
+## Agent Event Routing
+
+The `/hooks/agent` endpoint accepts a `target` field in the event `data` payload:
+
+| `target` | Behaviour |
+|----------|-----------|
+| `"main"` (default) | Forwards event to the main agent session via `GATEWAY_URL` |
+| `"sub"` | Spawns an isolated sub-agent session via `GATEWAY_SUB_URL` |
+
+Set `GATEWAY_SUB_URL` to route sub-agent dispatch to a different runtime. If unset, it defaults to `GATEWAY_URL` — no changes required for single-gateway setups.
+
+When `target: "sub"`, the payload must include a `data.message` field containing a natural language contract. The interceptor passes this through untouched — the receiving agent reads a skill reference to determine what to do.
+
+Required structured fields in `data`:
+| Field | Validation |
+|-------|-----------|
+| `target` | `"sub"` or `"main"` |
+| `message` | String — natural language contract passed through as-is |
+
+Optional fields in `data` (for `target: "sub"` only):
+| Field | Validation |
+|-------|-----------|
+| `sessionKey` | Overrides the default `sub:<type>:<id>` session isolation key. Must start with an allowed prefix (default: `sub:`). Max 256 chars. Configure `ALLOWED_SESSION_KEY_PREFIXES` (comma-separated env var) to extend the allowed list. Returns 400 if prefix is disallowed or length is exceeded. |
+
+The response includes a `target` field indicating which session received the event.
+
+## Proxy Routing
+
+When `data.resource` is set on an agent event, the interceptor looks up a `proxy`-typed resource link in the database and routes the outbound request through the configured proxy.
+
+| Field | Description |
+|-------|-------------|
+| `data.resource` | Resource name (alphanumeric, hyphens, underscores, max 128 chars). If present and a `proxy` link exists, the request is routed through that proxy. |
+
+The proxy URL is read from the environment variable named in the resource's `config.urlEnvVar`. Supported protocols: HTTP and HTTPS proxies (via undici `ProxyAgent`).
+
+Error behaviour:
+- `503 Proxy misconfigured` — proxy env var not set
+- `503 Proxy unreachable` — connection refused/reset/timed out while routing through proxy
+
+`InterceptorConfig.dbSql` must be populated at startup to enable proxy lookup. If omitted, proxy routing is skipped silently.
+
+## Files
+
+```
+services/agent-interceptor/
+└── (service source)
+```

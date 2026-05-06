@@ -1,0 +1,50 @@
+---
+title: "Outcomes Optimizer"
+description: "A framework for training agent capabilities through version-controlled skills that evolve via execution experience."
+---
+
+## What It Is
+
+This project applies neural network training principles to agent skill development. Skills are versioned files that agents execute. Execution produces traces. Traces drive skill updates. Skills improve over time.
+
+## Core Concept
+
+| Neural Network | Skill Optimization |
+|---|---|
+| Weights | Skill files (`SKILL.md`) |
+| Forward pass | Skill execution |
+| Loss function | Rubric evaluation |
+| Backpropagation | Execution trace reflection |
+| Weight update | Skill file commit |
+| Checkpoint | Git commit |
+
+## Repository Layout
+
+| Path | Purpose |
+|---|---|
+| `packages/` | CLI tools agents use as tools (agent-media, agent-email, etc.) |
+| `services/` | Deployed infrastructure services |
+| `skills/` | Version-controlled agent capabilities |
+| `utils/` | System infrastructure — loop, config, CLI adapters, database |
+| `workspace/` | Ephemeral execution space — never committed to main |
+
+## Operational Modes
+
+| Mode | Description |
+|---|---|
+| **Skill Execution** | Agent runs a skill to complete a real task. Errors trigger reflection and skill updates. |
+| **Skill Refinement** | Agent analyzes traces and metrics to optimize skills for greater value. |
+| **Development** | Building and maintaining system infrastructure (utils, specs, docs). |
+
+## Loop Architecture
+
+The optimization loop runs epochs. Each epoch:
+
+1. Load goal from `workspace/goal.md`
+2. Sync skills to CLI adapter directory
+3. Spawn headless Claude session with goal + skills
+4. Evaluate result against rubric
+5. Commit skill updates
+6. Repeat until `COMPLETE` or max epochs reached
+
+Cloud runs execute on GitHub Actions self-hosted runners. Local runs execute in a git worktree.

@@ -1,0 +1,7 @@
+workspace/**
+.claude/**
+.worktrees/**
+results/**
+traces/**
+drizzle/**
+node_modules/**

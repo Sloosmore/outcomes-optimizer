@@ -1,0 +1,40 @@
+services:
+  runtime:
+    build:
+      context: ..
+      dockerfile: openclaw/Dockerfile
+    image: runtime-openclaw:latest
+    # "openclaw" alias: Cloudflare tunnel's remote ingress config targets http://openclaw:18789.
+    # Adding this alias lets the tunnel resolve the runtime container by its legacy hostname
+    # without requiring a Cloudflare dashboard change.
+    hostname: openclaw
+    networks:
+      default:
+        aliases:
+          - openclaw
+    environment:
+      - RUNTIME_ADAPTER=openclaw
+    volumes:
+      # Volume-mount bootstrap config so changes don't require a Docker image rebuild.
+      # Update /opt/runtime/openclaw/config/openclaw.json on the host and restart.
+      - ./openclaw/config/openclaw.json:/root/openclaw-bootstrap/openclaw.json:ro
+      # Persist openclaw config across container restarts so onboard only runs once.
+      - /opt/runtime/openclaw/data/openclaw-config:/root/.openclaw
+    ports:
+      - "127.0.0.1:18789:18789"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "18789"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  tunnel:
+    image: cloudflare/cloudflared:2025.2.0
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      runtime:
+        condition: service_healthy
+    environment:
+      - TUNNEL_URL=http://runtime:18789

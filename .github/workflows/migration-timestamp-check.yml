@@ -1,0 +1,36 @@
+name: Migration Timestamp Check
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+
+jobs:
+  check-duplicate-timestamps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Detect duplicate migration timestamp prefixes
+        run: |
+          set -euo pipefail
+          dups=$(ls supabase/migrations | sed 's/_.*//' | sort | uniq -d || true)
+          if [ -n "$dups" ]; then
+            echo "::error::Duplicate migration timestamp prefix(es) detected:"
+            echo "$dups" | while read -r ts; do
+              echo "::error::  $ts"
+              ls supabase/migrations | grep "^${ts}_" | sed 's/^/    /'
+            done
+            echo ""
+            echo "Two migrations share the same timestamp prefix. On a fresh"
+            echo "'docker compose up' postgres init this breaks ordering."
+            echo ""
+            echo "Fix: rename the colliding migration to a later, unique timestamp"
+            echo "using 'git mv', for example:"
+            echo "  git mv supabase/migrations/20260422000001_foo.sql \\"
+            echo "         supabase/migrations/20260429000001_foo.sql"
+            echo "Then commit and push."
+            exit 1
+          fi
+          echo "No duplicate migration timestamp prefixes found."

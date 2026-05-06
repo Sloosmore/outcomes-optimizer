@@ -1,0 +1,23 @@
+{
+  "packages": [
+    {
+      "path": "packages/agent-email",
+      "name": "throwmail",
+      "github": "<your-github-org>/throwmail",
+      "npm": "throwmail",
+      "type": "package"
+    }
+  ],
+  "bundled": [
+    {
+      "path": "skills/create-skill",
+      "name": "create-skill",
+      "type": "bundled-skill"
+    },
+    {
+      "path": "skills/oversight",
+      "name": "oversight",
+      "type": "bundled-skill"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+---
+title: "Services Overview"
+description: "Deployed infrastructure services that support agent workflows."
+---
+
+Services live in `services/`. They are deployed infrastructure — not CLI tools and not skills.
+
+## Available Services
+
+| Service | Purpose |
+|---|---|
+| `agent-interceptor` | Event routing proxy for agent hooks |
+| `credential-proxy` | Resource-driven credential injection sidecar |
+| `sidecar` | Per-process HTTP proxy that injects X-Process-Id on outbound requests |
+
+## Design Principle
+
+Services are invisible to packages. A package calls an external API directly. The service layer intercepts and augments the request (credential injection, IP routing, logging) without the package knowing.
+
+This is hexagonal architecture in practice: the core (packages) is blind to the infrastructure (services). If a package needs to change to accommodate a service, the service design is wrong.

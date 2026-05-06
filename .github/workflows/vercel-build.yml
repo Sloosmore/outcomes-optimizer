@@ -1,0 +1,63 @@
+name: Vercel Build (agent-livestream)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: vercel-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (agent-livestream)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            livestream:
+              - 'services/agent-livestream/**'
+              - 'packages/contracts/**'
+              - 'packages/database/**'
+              - 'packages/logger/**'
+              - 'packages/agent-events/**'
+              - 'packages/auth/**'
+              - 'packages/agent-core/**'
+              - 'packages/sandbox/**'
+
+      - name: Skip — no livestream changes
+        if: steps.filter.outputs.livestream != 'true'
+        run: echo "No agent-livestream changes — skipping build"
+
+      - uses: pnpm/action-setup@v4
+        if: steps.filter.outputs.livestream == 'true'
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        if: steps.filter.outputs.livestream == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.livestream == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        if: steps.filter.outputs.livestream == 'true'
+        run: pnpm turbo build
+
+      - name: Build agent-livestream
+        if: steps.filter.outputs.livestream == 'true'
+        run: pnpm --filter agent-livestream build
+        env:
+          VITE_DEBUG_EMAIL: ''
+          VITE_DEBUG_PASSWORD: ''

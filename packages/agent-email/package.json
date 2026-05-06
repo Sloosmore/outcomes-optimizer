@@ -1,0 +1,31 @@
+{
+  "name": "throwmail",
+  "version": "0.3.0",
+  "description": "CLI for managing email inboxes in agent workflows - receive emails, extract verification links/codes",
+  "type": "module",
+  "bin": {
+    "throwmail": "./bin/throwmail.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "email",
+    "cli",
+    "agent",
+    "verification",
+    "automation"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

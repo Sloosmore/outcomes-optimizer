@@ -1,0 +1,84 @@
+---
+title: "Config System"
+description: "YAML config that drives CLI selection, database mode, skills paths, and eval behavior."
+---
+
+> **Status:** Implemented
+
+## Schema
+
+```yaml
+experiment:
+  name: string            # min 1 char
+
+database:
+  adapter: none | local | cloud
+
+cli:
+  adapter: claude-code | codex | mock
+  workingDir: string      # optional; relative paths resolved under repo root
+
+skills:                   # optional
+  versioned: string       # path to committed skills (e.g., "skills/")
+  draft: string           # optional; overrides adapter default draft path
+
+identity:                 # optional
+  email:
+    adapter: gmail | mailtm | 1secmail
+  phone:
+    adapter: string
+    number: string?
+  browser:
+    provider: string
+    session_ttl: number?
+
+eval:                     # optional
+  data:
+    type: cloud | local | none
+    training_set: string? # when type=cloud
+    local_path: string?   # when type=local
+  policy: value_based | policy_gradient | actor_critic
+  loop:
+    enabled: boolean
+    max_epochs: number
+```
+
+## Key Options
+
+| Option | Description |
+|---|---|
+| `cli.workingDir` | Override CLI working directory. Relative paths resolved inside repo root. |
+| `skills.versioned` | Path to version-controlled skills. Defaults to `skills/`. |
+| `skills.draft` | Override draft skills path for the current adapter. |
+
+## Default Draft Paths by Adapter
+
+| Adapter | Default Draft Path |
+|---|---|
+| `claude-code` | `.claude/skills/` |
+| `codex` | `.codex/skills/` |
+| `mock` | `.mock/skills/` |
+
+## API
+
+```typescript
+import { loadConfig } from './utils/config'
+
+const config = loadConfig()           // reads config.yaml from cwd
+const config = loadConfig('/path')    // reads from custom path
+```
+
+## Files
+
+```
+utils/config/
+├── index.ts      # loadConfig() — loads YAML, validates with Zod
+├── schema.ts     # Zod schema definition
+├── types.ts      # TypeScript types (inferred from Zod)
+└── __tests__/
+```
+
+## Validation
+
+- Zod `safeParse()` for detailed error messages
+- Throws on missing file, invalid YAML, or schema violation

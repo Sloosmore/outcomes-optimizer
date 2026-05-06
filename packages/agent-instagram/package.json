@@ -1,0 +1,33 @@
+{
+  "name": "agent-instagram",
+  "version": "0.1.0",
+  "description": "CLI for posting photos, videos, and reels to Instagram in agent workflows",
+  "type": "module",
+  "bin": {
+    "agent-instagram": "./bin/agent-instagram.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "instagram",
+    "cli",
+    "agent",
+    "social-media",
+    "automation"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^13.1.0",
+    "dotenv": "^17.2.3",
+    "undici": "^7.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

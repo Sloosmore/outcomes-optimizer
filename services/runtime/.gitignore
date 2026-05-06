@@ -1,0 +1,5 @@
+# Claude Code OAuth credentials — never commit these
+claude-credentials/
+
+# Docker env file may contain secrets
+.env

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [
+    "turbo.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    ".npmrc",
+    "tsconfig.json",
+    "eslint.config.mjs"
+  ],
+  "globalEnv": [
+    "CI",
+    "NODE_ENV",
+    "NODE_OPTIONS",
+    "TURBO_CACHE_DIR",
+    "VITE_*"
+  ],
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"],
+      "inputs": [
+        "src/**",
+        "public/**",
+        "index.html",
+        "package.json",
+        "tsconfig*.json",
+        "vite.config.*",
+        "tailwind.config.*",
+        "postcss.config.*"
+      ],
+      "dependsOn": ["^build"]
+    },
+    "dev": {
+      "persistent": true,
+      "cache": false
+    },
+    "lint": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**/*.ts", "*.json", "eslint.rules.js"]
+    },
+    "test": {
+      "cache": false
+    },
+    "deploy": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "passThroughEnv": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]
+    }
+  }
+}

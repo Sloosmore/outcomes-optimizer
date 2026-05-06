@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "strict": true,
+    "outDir": "dist",
+    "declaration": true,
+    "rootDir": "src",
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "src/**/__tests__/**",
+    "src/drizzle.ts",
+    "src/drizzle-client.ts",
+    "src/utils/tags.ts",
+    "src/utils/resource-helpers.ts",
+    "src/utils/process-dependencies.ts",
+    "src/resources.ts",
+    "src/storage/traces.ts",
+    "src/storage/upload-asset.ts",
+    "src/actions/execute-action-runner.ts"
+  ]
+}

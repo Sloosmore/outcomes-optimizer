@@ -1,0 +1,38 @@
+{
+  "name": "agent-interceptor",
+  "version": "0.1.0",
+  "description": "Webhook interceptor that normalizes and forwards payloads to agent gateways",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "build": "tsc",
+    "secrets:sync": "bash scripts/secrets-sync.sh agent-interceptor prd",
+    "dev": "wrangler dev --local",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "webhook",
+    "interceptor",
+    "agent",
+    "gateway",
+    "hono"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "@hono/node-server": "^1.19.9",
+    "@skill-networks/database": "workspace:*",
+    "@skill-networks/doppler-secrets": "workspace:*",
+    "@skill-networks/logger": "workspace:*",
+    "hono": "^4.12.2",
+    "postgres": "^3.4.8",
+    "undici": "^6.21.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260301.1",
+    "@types/node": "^22.15.21",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17",
+    "wrangler": "^4.71.0"
+  }
+}

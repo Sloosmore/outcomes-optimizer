@@ -1,0 +1,94 @@
+name: Publish Packages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm install -g pnpm && pnpm install --frozen-lockfile
+
+      - name: Get changed files
+        id: changed
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Publish changed packages
+        run: |
+          set -euo pipefail
+
+          REGISTRY="publish/registry.json"
+
+          # Read packages from registry and check if any files changed under their path
+          python3 - <<'PYEOF'
+          import json, os, subprocess, sys
+
+          registry = json.load(open('publish/registry.json'))
+          changed_files = os.environ.get('CHANGED_FILES', '')
+
+          for pkg in registry.get('packages', []):
+              pkg_path = pkg['path']
+              pkg_name = pkg['name']
+              pkg_type = pkg.get('type', '')
+
+              # Check if any changed file is under this package's path
+              changed = any(
+                  f.startswith(pkg_path + '/') or f == pkg_path
+                  for f in changed_files.splitlines()
+                  if f.strip()
+              )
+
+              if not changed:
+                  print(f"[skip] {pkg_name}: no changes under {pkg_path}")
+                  continue
+
+              print(f"[publish] {pkg_name}: changes detected under {pkg_path}")
+
+              if pkg_type == 'package':
+                  # Push to GitHub
+                  print(f"  -> Running push.sh {pkg_name}")
+                  result = subprocess.run(
+                      ['bash', 'publish/push.sh', pkg_name],
+                      capture_output=False
+                  )
+                  if result.returncode != 0:
+                      print(f"ERROR: push.sh failed for {pkg_name}")
+                      sys.exit(1)
+
+                  # npm publish from the source directory
+                  print(f"  -> Running npm publish in {pkg_path}")
+                  result = subprocess.run(
+                      ['npm', 'publish', '--access', 'public'],
+                      cwd=pkg_path,
+                      capture_output=False
+                  )
+                  if result.returncode != 0:
+                      print(f"ERROR: npm publish failed for {pkg_name}")
+                      sys.exit(1)
+
+          PYEOF
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+          GH_TOKEN: ${{ secrets.GH_SECRETS_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

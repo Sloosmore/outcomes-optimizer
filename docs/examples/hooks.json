@@ -1,0 +1,7 @@
+{
+  "github.workflow_run.completed": "Check the run conclusion. If success, update state.json metrics and evaluate if the campaign goal is met. If views > 100k, mark COMPLETE. If not, re-dispatch with the same training set for 2 more epochs. If growth has stalled for 3 consecutive runs, update strategy.md with a new approach before re-dispatching.",
+  "github.workflow_run.failed": "Pull the run logs. If it's a build error in agent-interceptor or packages, open a fix PR and re-dispatch. If it's a timeout, increase max_epochs by 2. If it's a runner issue (disk full, permissions), notify #skill-networks and pause the campaign.",
+  "instagram.comments": "Check which account this is for. For @squarebent (test account): log the comment to metrics/engagement.json and move on. For production accounts: analyze sentiment — if positive, heart-react. If it's a question, draft a reply. If negative, flag for review in notifications/flagged/.",
+  "instagram.media_insights": "Pull view count and engagement rate. Update metrics/. Compare against campaign goal. If engagement rate > 5%, note what's working in strategy.md. If views plateaued across 2 check-ins, suggest a content pivot.",
+  "*": "Write the raw event to workspace/notifications/ for the agent to review on its next epoch."
+}

@@ -1,0 +1,363 @@
+---
+title: "agent-livestream"
+description: "Real-time React dashboard that visualises the agent resource graph and live cursor positions."
+---
+
+## Purpose
+
+Displays a live graph of resources and resource-links alongside animated cursors showing which agent process is currently acting on which resource. Live events are streamed directly from Supabase Realtime to the browser using the anon key.
+
+## Architecture
+
+```
+browser → /api/org                                          → user's linked projects (from resource_links)
+         → /api/graph?projectId=<uuid>                      → Supabase (resources + resource_links, project-scoped)
+         → /api/resource-types                              → Supabase (distinct resource types)
+         → /api/resources                                   → Supabase (resources table)
+         → /api/resource-links                               → Supabase (resource_links table, full graph)
+         → /api/processes?since=<iso>&projectId=<uuid>      → Supabase (processes, project-scoped)
+         → /api/process-events/:processId                   → Supabase (paginated agent_events; supports ?limit=&before=&after=; returns { events, total })
+         → /api/events?projectId=<uuid>                     → SSE (live agent_events stream scoped to a project; requires JWT)
+         → /api/metrics/latest?projectId=<uuid>             → Supabase (latest snapshot per metric_key, project-scoped)
+         → /api/metrics/history?skillId=&key=&days=         → Supabase (history for a metric_key)
+         → /api/github/status                               → GitHub App installation status for the authenticated user
+         → /github/callback                                 → GitHub App OAuth callback (unauthenticated, state JWT-verified)
+         → /api/sandbox/provision                            → Provision a per-user sandbox VM + Cloudflare DNS (POST; body: { publicKey: string }; requires JWT)
+         → /api/sandbox/deprovision                          → Deprovision user's sandbox (DELETE; idempotent; requires JWT)
+         → /api/sandbox/status                               → Get sandbox status + IP (GET; requires JWT)
+         → /api/sandbox/ssh-access                           → Get SSH connection info (GET; requires JWT)
+         → /api/sandbox/exec                                 → Run a command on the user's sandbox via SSH (POST; body: { command: string }; requires JWT; 4096-char limit)
+         → /api/sandbox/repo-clone                           → Mint a short-lived GitHub clone URL (POST; body: { repo: string }; requires JWT; uses server-side GITHUB_APP_* secrets)
+         → /api/voice-tool/ctx                              → Get sandbox SSH context (host, sandboxId, privateKey) for the sandbox agent runner (POST; requires voice-tool JWT; NOT behind JWT wall)
+         → /api/voice-tool/dispatch                         → Demo dispatch: returns dashboard URL of user's latest process (POST; body: { spec_url: string }; requires voice-tool JWT; NOT behind JWT wall; rate-limited 20 req/min)
+         → /sandbox/ready                                    → VM ready callback — updates IP and adds CF tunnel ingress rule (POST; requires PROVISION_SECRET; NOT behind JWT wall)
+         → /sandbox/bootstrap-check                          → Check if bootstrap.sh is loaded (GET; requires PROVISION_SECRET)
+browser ← Supabase Realtime WebSocket                       → agent_events INSERT (direct, authenticated session, 24h RLS window)
+  [cursor animation uses the BFF SSE stream, not the direct Realtime connection]
+```
+
+The BFF is split into a pure Hono app (`server/app.ts`) with deployment adapters (`server/adapters/node.ts` for local dev, `server/adapters/vercel.ts` for serverless). The Vercel function entry point is `api/index.ts`, which re-exports the handlers from `server/adapters/vercel.ts`. Agent-cursor animation events are streamed via the BFF SSE endpoint (`GET /api/events?projectId=<uuid>`) using `fetch`-based streaming with `Authorization: Bearer` headers — the cursor hook (`use-polled-latest-events.ts`) subscribes via a module-level SSE store (`sse-store.ts`) and falls back to per-process polling when SSE is unavailable. General graph updates still use Supabase Realtime directly via `VITE_SUPABASE_ANON_KEY`. The frontend supports three graph layout modes (tree, force, and terrain) switchable at runtime via a display options panel. Routing is handled by TanStack Router; filter selections and layout state are stored in URL search params so views are shareable and survive refresh. The index route validates all search params via `validateSearch`.
+
+## Authentication
+
+All `/api/*` routes require a valid `Authorization: Bearer <jwt>` header. The JWT is verified by `server/middleware/jwt.ts`:
+
+- **JWKS (production)** — Uses `createRemoteJWKSet` from `jose` pointing at `$SUPABASE_URL/auth/v1/.well-known/jwks.json`. Accepts RS256/ES256, audience `authenticated`, issuer `$SUPABASE_URL/auth/v1`.
+- **HS256 fallback (dev only)** — Falls back to `SUPABASE_JWT_SECRET` when `SUPABASE_URL` is unset. Throws at startup if both are absent, or if HS256 is attempted in production.
+
+**When a secrets manager is unavailable**, generate a fresh Supabase JWT directly using env vars already in the container:
+
+```bash
+TOKEN=$(curl -s -X POST \
+  "${SUPABASE_URL}/auth/v1/token?grant_type=password" \
+  -H "apikey: ${VITE_SUPABASE_ANON_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"<EMAIL>","password":"<PASSWORD>"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/graph
+```
+
+`$SUPABASE_URL` and `$VITE_SUPABASE_ANON_KEY` are always present in the runtime container env — no secrets manager needed.
+
+### Onboarding flow (access codes + magic links)
+
+Two unauthenticated routes live under `/auth` (before the JWT wall):
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /auth/validate-code` | Check whether an access code exists and is `active` |
+| `POST /auth/magic-link` | Atomically redeem an access code and issue a Supabase magic link |
+
+The magic-link route marks the code `used` in a single `UPDATE … WHERE status='active'` to prevent race-condition double-redemption. Both routes are IP-rate-limited (10 req/min via `server/middleware/rate-limit.ts`).
+
+## LLM Topology — Dual-Path Split
+
+Two separate LLM paths run in this service and must stay independently configurable:
+
+- **Orchestrator** (`voice-agent.ts`, `local-llm-stream.ts`): selects tools, drafts replies. Reads `ANTHROPIC_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`. Production target: OpenAI direct via local credential proxy. Default model: `claude-haiku-4-5-20251001` (overridable via `LLM_MODEL` env var).
+- **Sandbox subagent** (`research.mjs` via claude-agent-sdk): does the actual rendering work inside the sandbox VM. Reads `SANDBOX_ANTHROPIC_BASE_URL`, `SANDBOX_ANTHROPIC_API_KEY`, `SANDBOX_RESEARCH_MODEL`. Production target: a self-hosted CLIProxyAPI gateway fronting an external coding model.
+
+Never collapse these into one set of env vars — the two paths target different backends and rotating one must not silently rotate the other.
+
+## Voice Chat
+
+The `/chat/:id` route provides a voice session powered by **LiveKit**. Two LiveKit agents run server-side:
+
+- **`voice-agent.ts`** — STT → LLM → TTS pipeline using deepgram/nova-3, openai/gpt-4o-mini, and openai/tts-1. Persists conversation turns to the `messages` table. Loads the last 10 DB messages as a chat context prefix. Exposes `claude_code`, `share_screen`, and `dispatch` tools. `claude_code` SSHes into the user's sandbox VM and runs `research.mjs` there via `runSandboxAgent`. Listens for text chat messages via the LiveKit `dataReceived` data channel (replayed history is filtered by timestamp). The `dispatch` tool posts to `/api/voice-tool/dispatch` (demo mode: returns the user's latest process URL) and emits the result via the `artifact_ready` data channel so the iframe navigates to the terrain dashboard.
+
+### Architecture
+
+```
+browser → /token                              → LiveKit access token (rate-limited, UUID-validated chatId)
+         → /api/chats                          → list chats (GET) / create chat (POST)
+         → /api/chats/:id                      → chat detail including artifactTiles, stageMode (GET)
+         → /api/chats/:id/artifact             → push URL onto tile rail (PATCH)
+         → /api/chats/:id/artifact/activate    → promote existing tile to index 0 (POST)
+         → /api/chats/:id/stage-mode           → flip single-iframe ↔ Stage Manager toggle (PATCH)
+         → /api/chats/:id/messages             → list messages (GET) / send message (POST)
+browser ↔ LiveKit server                       → voice (STT/LLM/TTS) + artifact data channel
+```
+
+### LiveKit Streams
+
+LiveKit text-stream topics (defined in `contracts/livekit.ts`):
+
+| Topic | Direction | Schema | Purpose |
+|---|---|---|---|
+| `research_dispatch` | client → worker | `ResearchDispatch` | Trigger a research run |
+| `artifact_ready` | worker → client | `ArtifactReady` | Artifact port available |
+| `worker_heartbeat` | worker → client | `WorkerHeartbeat` | Progress / done signal |
+| `worker_error` | worker → client | `WorkerError` | Error from worker |
+
+### Stage Manager
+
+When the `claude_code` tool completes, the server auto-fires `artifact_ready` on the LiveKit data channel with the canonical artifact URL. The client (`use-stage-tiles.ts`) catches the event, immediately writes the URL to the React Query cache (optimistic write) so the iframe mounts on the next paint, then calls `PATCH /api/chats/:id/artifact` to persist the tile. The server dedupes, promotes the URL to index 0, and caps the rail at 4 entries. On PATCH success the cache is invalidated to reconcile with the server; on failure (non-2xx or network error) the optimistic write is reverted via the same invalidation.
+
+Two renderer modes are available (toggled via the "dials" button in the top bar):
+- **Single (default)**: one full-bleed iframe showing the active tile (`stageMode: false`).
+- **Stage Manager**: wallpaper + multi-iframe rail with the active tile large on the right and inactive tiles as thumbnails in a left column (`stageMode: true`). Clicking a thumbnail promotes it via `POST /api/chats/:id/artifact/activate` without reloading any iframe.
+
+After leaving and rejoining a LiveKit room, `use-stage-tiles.ts` invalidates the chat-detail query on every `connected` transition so the rail reflects any tiles persisted during the absence.
+
+### Sandbox Research Runner — SSH-grounded research
+
+Both the chat and voice paths run research the same way: `runSandboxAgent` (`server/adapters/research/sandbox-agent-runner.ts`) SSHes into the user's per-user sandbox VM and executes `sandbox-scripts/research.mjs` there. The script runs `@anthropic-ai/claude-agent-sdk`'s `query()` with `Bash/Read/Write/WebSearch` tools plus the in-process `register_artifact` MCP tool, produces a plain-text summary, optionally spawns a detached HTTP server for the rendered artifact, and writes a final JSON line `{ "text": "..." }` to stdout. The URL, if any, is inlined in `text`.
+
+The sandbox is resolved via `resolveSandboxCtx` (`server/lib/resolve-sandbox-ctx.ts`): looks up the user's server resource by `auth_user_id`, extracts `config.ip` as the SSH host, and fetches the SSH private key from Vault.
+
+**`SshManager`** (`server/adapters/research/ssh-manager.ts`) maintains one SSH ControlMaster per adapter instance (~5–20 ms per call after the socket is established). The SSH target is always `root@<ip>` (bare IPs get `root@` prepended automatically). The connection is closed after each `runSandboxAgent` call.
+
+**`research.mjs` — artifact rendering via `register_artifact`**: When the research agent decides to render a visual artifact, it writes files under `/tmp/artifacts/run-<id>/` and calls the in-process MCP tool `register_artifact({ directory, filename? })`. The tool enforces that the directory is under `/tmp/artifacts/`, picks a free port, spawns a detached `python3 -m http.server`, verifies the server is accepting connections, and returns the canonical URL (`https://artifact-<sandboxId>-<port>.<your-artifact-domain>/`). The model must use this URL verbatim — it must not construct artifact URLs itself. Previously, a post-processing regex rewrote hallucinated UUIDs in URLs; the `register_artifact` tool eliminates the hallucination at the source by making the URL construction happen in trusted host code.
+
+**Tool registry** (`server/tools.ts`) is the single source of truth for all tool definitions. `ToolMeta` holds name/description/parameters; `ToolDefinition` adds `execute`. `buildTools(ctx)` returns a per-request map with `execute` closures already bound to the acting user's `authUserId`. The registry feeds:
+- `POST /api/chat` (AI SDK `streamText` tools via `buildTools`)
+- `GET /api/chat/config` (tools schema via `getAllToolDefs`)
+- `GET /api/tools` + `POST /api/tools/:name` (list + execute; requires real authUserId)
+
+### Key components
+
+- **`OpenAIRealtimeAdapter`** (`src/adapters/openai/openai-realtime-adapter.ts`) — manages the WebRTC session, tool execution, transcript buffering, and audio analysis
+- **`useVoiceSession`** (`src/hooks/use-voice-session.ts`) — React hook that fetches config from `/api/chat/config` and drives the adapter lifecycle
+- **`VoiceSessionProvider`** / **`useVoiceSessionCtx`** (`src/hooks/voice-session-context.tsx`) — context wrapper that exposes the voice session to child components without prop drilling
+- **`ArtifactPanel`** (`src/components/artifact-panel.tsx`) — sandboxed iframe (`sandbox="allow-scripts allow-same-origin allow-forms"`) that fills ChatStage when an artifact is active; src is the `url` field from the ARTIFACT event (always server-computed)
+- **`VoiceOrb`** (`src/components/voice-orb.tsx`) — large button (96×96px) that visualises session state:
+  - `idle` / `error` — solid circle
+  - `connecting` — spinner
+  - `listening` — primary colour circle
+  - `thinking` — pulsing muted circle
+  - `calling` — three bouncing dots (tool call in progress)
+  - `speaking` — circle that grows with volume via the `--orb-volume` CSS variable (80–176px)
+- **`CallBar`** (`src/components/call-bar.tsx`) — floating bottom bar visible during an active call; contains hang-up and transcript-toggle buttons
+- **`ChatPanel`** (`src/components/chat-panel.tsx`) — collapsible side panel (272px wide) showing the transcript; animated open/close. Accepts `historyTranscripts` prop (DB messages mapped to `TranscriptDelta[]`) merged with live transcripts on render.
+
+### Phase-based chat flow
+
+The `/chat/:id` route runs a three-phase state machine managed by `ChatSession`:
+
+| Phase | What the user sees |
+|---|---|
+| `idle` | Large mic button — tap to start |
+| `active` | Voice orb + call bar; optional transcript panel |
+| `ended` | "Chat ended" message with a link to start a new chat |
+
+On start, `connect()` is called optimistically (phase advances to `active` before the promise resolves). If connection fails the phase reverts to `idle` and an error alert is shown. The agent sends an opening greeting automatically once the session is ready.
+
+### Tool call flow
+
+1. `agent_tool_start` fires → `toolCallActive = true`, earcon plays, state transitions to `'calling'`
+2. Research fetch runs in parallel with a 1 s minimum delay (so the animation is perceptible)
+3. `agent_tool_end` fires → buffered pre-tool transcript items are flushed, state returns to `'listening'`
+
+### Server endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/health` | GET | Returns `{ db, ssh, livekit, version }` status |
+| `/sandbox/bootstrap-check` | GET | Returns `{ loaded: true, bytes: N }` if `bootstrap.sh` was loaded at startup; `{ loaded: false }` otherwise. Requires `Authorization: Bearer <PROVISION_SECRET>`. |
+| `/sandbox/ready` | POST | VM ready callback — updates sandbox IP + status, adds CF tunnel ingress rule. Requires `PROVISION_SECRET`. Body: `{ resourceId, ip, providerServerId }`. |
+| `/token` | GET | Issues a LiveKit access token (rate-limited; requires valid UUID `chatId` query param). Also mints a `voiceToolJwt` when a valid Supabase JWT is presented in `Authorization`. When `voiceToolJwt` is issued, pre-creates the room and explicitly dispatches the named `voice-agent` via `AgentDispatchClient.createDispatch` (auto-dispatch and `createRoom({ agents: [...] })` are unreliable per livekit/agents-js#1211). Optional `activeProject` query param (alphanumeric + `_:.-`, max 200 chars) is validated and embedded as an `active_project` claim in the voice-tool JWT so dispatched skills land in the user's active project. |
+| `/api/debug-log` | POST | Sink for LiveKit Cloud worker stdout events. Auth: `X-Debug-Log-Secret` header (same as `RESEARCH_INTERNAL_SECRET`). NOT behind the Supabase JWT wall — the worker has no JWT. If secret is unset, accepts any POST (emergency-debug fallback). |
+| `/api/sandbox/provision` | POST | Provision a per-user sandbox VM + Cloudflare DNS. Body: `{ publicKey: string }`. Idempotent — returns `{ status: 'provisioning', resourceId }` if already in progress. |
+| `/api/sandbox/deprovision` | DELETE | Deprovision the user's sandbox. Idempotent (returns `{ deleted: true, alreadyGone: true }` if no sandbox exists). |
+| `/api/sandbox/status` | GET | Returns `{ status, ip, resourceId, providerServerId }` for the user's sandbox. |
+| `/api/sandbox/ssh-access` | GET | Returns `{ allowed: true, ip, keyPath }` for SSH connection info. |
+| `/api/sandbox/exec` | POST | Execute a shell command on the sandbox via SSH. Body: `{ command: string }` (max 4096 chars). Returns `{ stdout, stderr, exitCode }`. |
+| `/api/sandbox/repo-clone` | POST | Mint a short-lived GitHub clone URL. Body: `{ repo: string }`. Returns `{ cloneUrl }`. |
+| `/api/voice-tool/ctx` | POST | Returns sandbox SSH context `{ host, sandboxId, privateKey }` for the sandbox agent runner. Uses voice-tool JWT (not Supabase JWT). NOT behind the Supabase JWT wall. |
+| `/api/voice-tool/dispatch` | POST | Dispatches a skill and returns `{ url, processId, processName, specUrl }` where `url` is a same-origin terrain dashboard path for the new process. Body: `{ spec_url: string }` (http/https URL to a markdown spec). Dispatches into the user's active project if the voice-tool JWT carries a valid `active_project` claim that the user has access to; otherwise falls back to the per-user `project:<userId>` resource. Uses voice-tool JWT. NOT behind the Supabase JWT wall. Rate-limited: 20 req/min per IP. |
+| `/api/chats` | GET | Returns `ChatSummary[]` ordered by `created_at` desc |
+| `/api/chats` | POST | Creates a chat; body `{ title?: string }` |
+| `/api/chats/:id` | GET | Returns `ChatDetail` (includes `artifactTiles: ArtifactTile[]`, `stageMode: boolean`) |
+| `/api/chats/:id/artifact` | PATCH | Pushes a URL onto the tile rail (dedupe + promote to index 0, cap 4). Body `{ url?: string, port?: number }`. `url` accepts http/https absolute or same-origin `/` paths. Port-only payloads (legacy) are accepted and no-oped. |
+| `/api/chats/:id/artifact/activate` | POST | Promotes an existing rail URL to index 0. Body `{ url: string }`. Returns 400 if URL is not on the rail. |
+| `/api/chats/:id/stage-mode` | PATCH | Flips the renderer toggle. Body `{ enabled: boolean }`. |
+| `/api/chats/:id/messages` | GET | Returns `MessageRow[]` ordered by `created_at` asc |
+| `/api/chats/:id/messages` | POST | Inserts a message; body `{ role: 'user' \| 'assistant', content: string }` |
+| `/api/tools/claude_code` | POST | Runs Claude Code inside the user's sandbox VM; body `{ prompt: string }`; returns `{ text: string }` (URL may be inlined in text if artifact was rendered) |
+| `/preview/:filename` | GET | Renders a markdown file from `/tmp/research-output/` as HTML (max 1 MB) |
+
+URL search params on the index route:
+- `activeTypes` — array of resource type strings to filter the graph
+- `layout` — `"tree"` (default), `"force"`, or `"terrain"`; validated against the layout registry
+- `tree.direction` — `"TB"` (top-to-bottom, default) or `"LR"` (left-to-right); only used when `layout=tree`
+- `cursors` — `"1"` (default, show agent cursors) or `"0"` (hide cursors)
+- `nodeStyle` — `"card"` (default) or `"orb"`; switches between card-based org chart nodes and circular orb nodes
+- `focusType` — `"skill"`, `"agent"`, or `""` (default, no focus); persists the focused item across reloads
+- `focusId` — ID of the focused skill or agent process; validated against known resources/processes at render time
+
+Key frontend components:
+
+- **`CardNode`** (`src/components/ui/card-node.tsx`) — card-based org chart node with an orb overflow above the card body. Supports `xl`/`lg`/`md`/`sm` size tiers (driven by `resource.config.size`). Shows a name label, optional description, and an active-cursor indicator. Both handles are positioned at the card center; `SkillEdge` applies rectangular half-width/height offsets for correct edge attachment. Selected state renders a `ring-2 ring-primary` outline. Used when `nodeStyle=card`.
+- **`AppTopBar`** (`src/components/app-top-bar.tsx`) — shared top bar rendered in the root layout; contains the sidebar toggle on the left and a portal slot (`TopBarRightSlotContext`) on the right for page-specific controls
+- **`TopBarRightSlotContext`** / **`useTopBarRightPortal`** (`src/components/top-bar-slot.tsx`) — React context + portal mechanism allowing child routes to inject controls into the top bar without prop drilling
+- **`AppSidebar`** — Linear-style collapsible sidebar; shows org name, a Home nav link, and a collapsible **Calls** group that fetches recent calls from `/api/chats` (stale time 30 s) with a "New call" action navigating to `/chat/new`
+- **`ActiveAgentsPopover`** — popover listing all currently active agent processes with status badges; triggered from the sidebar
+- **`SkillGraph`** — React Flow graph of resources (default types: `agent`, `user`); supports drag (force mode only), focus-zoom, and per-node cursor overlays showing which agent(s) are acting on a resource. Multiple cursors can stack on one node; each is a clickable button that selects the corresponding agent process via the `onCursorClick?: (processId: string) => void` prop.
+- **`SkillDetailPanel`** — slide-in sheet panel with metadata for the currently selected skill node; includes a collapsible "Recently completed" section showing tasks finished in the last 6 hours (polled every 30 s from `/api/processes`)
+- **`useFocusParam`** (`src/hooks/use-focus-param.ts`) — hook that reads `focusType`/`focusId` from URL search params and returns the resolved `FocusedItem` (skill resource or agent process) plus `setSkillFocus`, `setAgentFocus`, `clearFocus` mutators
+- **`graphQueryOptions`** (`src/lib/graph-query.ts`) — shared TanStack Query options (key, queryFn, staleTime) used by both the route loader and all consumers; fetches `agent` and `user` resource types by default; avoids duplicating the fetch and cache key
+- **`GraphFilter`** / **`ActivityFilter`** — render buttons per resource type; toggle `activeTypes` in the URL via `useNavigate`
+- **`DisplayOptions`** — gear-icon dropdown for switching layout mode, toggling tree direction, and toggling agent cursors
+- **`ForceController`** — runs inside ReactFlow's context, owns the d3 simulation lifecycle; exposes `simNodesRef`, `simNodeMapRef`, `simRef`, `restartLoopRef` back to parent via ref props
+- **`AgentCursor`** — animated cursor overlay rendered inside a skill node when an agent process is focused on it
+
+## Layout Adapter Registry
+
+Layout modes are implemented as adapters registered in `src/adapters/layout/registry.ts`. Each adapter implements the `LayoutAdapter` interface:
+
+```ts
+interface LayoutAdapter {
+  id: string
+  label: string
+  icon: LucideIcon
+  computeLayout(nodes, edges, params): Map<string, {x, y}> | null
+  filterEdges?: (nodes, edges) => ResourceLink[]
+  reverseEdgeDirection?: boolean
+  controlsLabel?: string
+  renderControls?: (params, setParam) => React.ReactNode
+}
+```
+
+- **`computeLayout`** returns static positions for all nodes, or `null` to delegate to `ForceController` (physics simulation).
+- **`filterEdges`** prunes the edge set before rendering (tree adapter discards dangling edges whose endpoints are not in the node set, then builds a spanning tree to eliminate cross-links).
+- **`reverseEdgeDirection`** swaps ReactFlow source/target so arrows point parent→child in tree view.
+- **`renderControls`** renders adapter-specific options in the `DisplayOptions` panel (tree adapter renders TB/LR toggle).
+
+Three built-in adapters:
+
+| Adapter | `id` | Layout | Notes |
+|---|---|---|---|
+| `TreeLayoutAdapter` | `tree` | Static DAG (dagre) | TB or LR direction via `tree.direction` param |
+| `ForceLayoutAdapter` | `force` | Physics simulation (d3-force) | Nodes are draggable |
+| `TerrainLayoutAdapter` | `terrain` | Contour terrain overlay | Uses force positions; renders d3-contour elevation lines + animated agent cursors; hides edges and ReactFlow nodes |
+
+**Terrain mode** (`layout=terrain`) renders a topographic contour map where each resource is a "peak" whose height is proportional to `resource.config.value`. Contours are computed via `d3-contour` on a scalar field seeded from the project ID (deterministic per project). Agent cursors roam the terrain using physics-based random walks (`cursor-physics.ts`). Clicking a cursor follows it with the camera; clicking the pane cancels follow.
+
+To add a new layout: create an adapter file, implement `LayoutAdapter`, and add it to `LAYOUT_REGISTRY` in `registry.ts`.
+
+## Frontend Standards
+
+Frontend code follows the principles in `services/agent-livestream/CLAUDE.md`, enforced by ESLint (`npm run lint`):
+
+- **250-line file limit** — split components that grow too large
+- **No `setState` in `useEffect`** — derive state in the render path; use `useMemo` instead
+- **No inline `style={{}}`** — use Tailwind utility classes and semantic tokens (exception: ReactFlow `Handle` positioning, where Tailwind `!important` loses to ReactFlow's own transform system — see `resource-node.tsx`)
+- **Semantic tokens only** — `text-muted-foreground`, `bg-card`, etc.; no raw primitives like `text-zinc-500`
+
+## agent-events package
+
+`services/agent-events` is a shared TypeScript package that defines:
+
+- **Schemas** — Zod schemas for `AgentEvent`, `Resource`, and `ResourceLink`
+- **Interfaces** — `EventEmitterAdapter`, `EventStreamAdapter`, `EventHistoryAdapter`, `GraphDataAdapter`
+- **Adapters** — `SupabaseEventEmitterAdapter` (fire-and-forget insert to `agent_events` table)
+
+The `credential-proxy` imports this package to emit an event each time it injects credentials for a resolved resource.
+
+## Database
+
+Migrations included:
+
+- `0038_agent_events.sql` — creates `agent_events` table with RLS (anon SELECT, service_role INSERT/DELETE)
+- `0039_enable_agent_events_realtime.sql` — enables Supabase Realtime for the table
+- `0047_chats_messages.sql` — registers `chats` and `messages` tables (created out-of-band) into the Drizzle journal; both have `service_role_full_access` RLS. See `docs/utils/database.mdx` for schema details.
+- `20260319000001_add_artifact_port.sql` — (superseded) added `artifact_port` to `chats`.
+- `20260430000001_add_chats_artifact_url.sql` — (superseded) added `artifact_url` to `chats`.
+- `20260501000001_chats_artifact_tiles.sql` — drops `artifact_url` + `artifact_port`; adds `artifact_tiles jsonb NOT NULL DEFAULT '[]'` (ordered tile rail, max 4 entries, entry shape `{ url: string }`) and `stage_mode boolean NOT NULL DEFAULT false` (renderer toggle).
+
+## Observability
+
+The server uses `@skill-networks/logger` for structured logging. Set `LOG_LEVEL` to control the minimum level (`debug`, `info`, `warn`, `error`, `fatal`; defaults to `info` in production).
+
+Log persistence varies by adapter:
+- **Node adapter** — when `DATABASE_URL` is set, logs are written to the `logs` table via `DatabaseDrain` (Drizzle-based).
+- **Vercel adapter** — when `SKILL_NETWORKS_DATABASE_URL` is set, logs are written to the `logs` table via a postgres.js drain. This env var must point to the Supabase pooler (port 6543), not direct Postgres, to avoid connection exhaustion across serverless function instances.
+
+## Authentication
+
+### BFF JWT middleware
+
+All `/api/*` routes require a valid Supabase JWT. The middleware attempts JWKS discovery first (for ES256 tokens issued by Supabase branches), then falls back to HS256 using `SUPABASE_JWT_SECRET`. The server refuses to start if neither is available. `/health` and `/token` are excluded from auth.
+
+### Frontend auth
+
+- **Debug mode** (`VITE_DEBUG_EMAIL` + `VITE_DEBUG_PASSWORD` set): a `UserAuthAdapter` is pre-configured and the app signs in automatically.
+- **Production** (no debug env vars): users are redirected to `/login` and authenticate interactively. The `/login` route implements an email-first progressive flow: users enter their email, and if the account exists a magic link is sent immediately (`signInReturning` with `shouldCreateUser: false`); if no account is found they are prompted for an access/invite code before the magic link is issued. After a successful sign-in, Supabase stores the session in the client, and the `_authenticated` layout guard reads it via `supabaseClient.auth.getSession()`. If a user with an active session navigates to `/login`, they are immediately redirected to `/`.
+
+All authenticated routes live under the `_authenticated` pathless layout (`src/routes/_authenticated.tsx`), which enforces the session check via TanStack Router's `beforeLoad`.
+
+## Running locally
+
+```bash
+# start the Hono BFF (Node adapter)
+SUPABASE_URL=... SUPABASE_SERVICE_KEY=... SUPABASE_JWT_SECRET=... npm run server
+
+# start the Vite frontend (dev) — requires VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env
+# Set VITE_DEBUG_EMAIL and VITE_DEBUG_PASSWORD for auto-login (dev only)
+npm run dev
+```
+
+## Test scripts
+
+```bash
+# verify Supabase Realtime credentials (anon subscribe + service_role insert)
+SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_KEY=... node scripts/test-realtime-creds.mjs
+
+# emit synthetic events to test the UI
+SUPABASE_URL=... SUPABASE_SERVICE_KEY=... node scripts/emit-test-events.mjs
+
+# run the full E2E viewport test (starts BFF + Vite, inserts sentinel row, asserts DOM render)
+SUPABASE_URL=... SUPABASE_SERVICE_KEY=... npx tsx scripts/test-e2e-viewport.ts
+```
+
+### Integration tests without a secrets manager wrapper
+
+Pass env vars directly instead of wrapping in `doppler run` (or your equivalent):
+
+```bash
+SUPABASE_URL=$SUPABASE_URL \
+SUPABASE_SERVICE_KEY=$SUPABASE_SERVICE_KEY \
+SKILL_NETWORKS_DATABASE_URL=$SKILL_NETWORKS_DATABASE_URL \
+RUN_INTEGRATION=true \
+npx vitest run --reporter=verbose <test-file>
+```
+
+**Run test files sequentially, not concurrently.** Running multiple `RUN_INTEGRATION=true` vitest files in parallel exhausts the Supabase connection pool (high-latency runners can have several hundred ms baseline RTT to Supabase). Graph queries will time out (>60s). Each test file must be its own Bash command, not a combined `&&` chain kicked off simultaneously.
+
+### Test hooks (`VITE_TEST=1`)
+
+When the frontend is built with `VITE_TEST=1`, three `window` globals are exposed for automation:
+
+| Global | Signature | Purpose |
+|---|---|---|
+| `window.__sendText` | `(text: string) => void` | Send text via the WebRTC voice adapter |
+| `window.__textSend` | `(text: string) => Promise<void>` | Send a text message through the SSE chat stream (`/api/chat`) |
+| `window.__injectArtifact` | `(a: ArtifactSideEffect) => void` | Simulate a voice adapter artifact event (bypasses live OpenAI connection) |
+
+`window.__sendText` is used by `tests/share-screen-six-hop.spec.ts` (Story 4 six-hop E2E) to send share commands via the voice adapter. `window.__textSend` is used by `tests/story4.spec.ts` to trigger a real LLM tool-call flow end-to-end. `window.__injectArtifact` is used by `tests/artifact-voice.spec.ts` to test the artifact panel without a live voice session.
+
+### Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `ANTHROPIC_BASE_URL` | No | Override the Anthropic API base URL (e.g. a local proxy). The `/v1` path is appended automatically. Defaults to `https://api.anthropic.com`. |

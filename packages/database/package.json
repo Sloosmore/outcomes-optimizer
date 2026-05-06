@@ -1,0 +1,33 @@
+{
+  "name": "@skill-networks/database",
+  "version": "1.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./client": "./dist/client.js",
+    "./constants": "./dist/constants.js",
+    "./services": "./dist/services/index.js",
+    "./actions": "./dist/actions/index.js",
+    "./schema": "./schema.ts",
+    "./drizzle": "./src/drizzle.ts",
+    "./storage": "./dist/storage/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "db:migrate": "for f in $(ls ../../supabase/migrations/*.sql | sort); do echo \"Applying $f\"; psql -v ON_ERROR_STOP=1 \"${DATABASE_URL}\" -f \"$f\"; done && echo 'All migrations applied.'",
+    "db:introspect": "cd ../.. && npx drizzle-kit introspect --out packages/database/src --dialect postgresql --url \"${DATABASE_URL}\""
+  },
+  "dependencies": {
+    "@skill-networks/logger": "workspace:*",
+    "@supabase/supabase-js": "^2.99.1",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "drizzle-orm": "^0.45.1",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^2"
+  }
+}

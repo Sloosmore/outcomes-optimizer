@@ -1,0 +1,23 @@
+model_list:
+  - model_name: bench-gpt54mini
+    litellm_params:
+      model: openai/gpt-5.4-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: bench-gptoss120b
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+
+  - model_name: bench-glm47
+    litellm_params:
+      model: cerebras/zai-glm-4.7
+      api_key: os.environ/CEREBRAS_API_KEY
+
+  - model_name: bench-gemini31
+    litellm_params:
+      model: gemini/gemini-3.1-flash-lite-preview
+      api_key: os.environ/GOOGLE_API_KEY
+
+litellm_settings:
+  drop_params: true

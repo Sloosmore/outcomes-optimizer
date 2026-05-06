@@ -1,0 +1,29 @@
+{
+  "ignoreCommand": "exit 1",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "buildCommand": "cd ../.. && pnpm run build:web && cd services/agent-livestream && NODE_OPTIONS=--max-old-space-size=8192 vite build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "server/bootstrap.sh"
+    }
+  },
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "__default": true
+    }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index" },
+    { "source": "/token/:path*", "destination": "/api/index" },
+    { "source": "/health", "destination": "/api/index" },
+    { "source": "/auth/check-email", "destination": "/api/index" },
+    { "source": "/auth/validate-code", "destination": "/api/index" },
+    { "source": "/auth/magic-link", "destination": "/api/index" },
+    { "source": "/preview/:path*", "destination": "/api/index" },
+    { "source": "/sandbox/:path*", "destination": "/api/index" },
+    { "source": "/github/:path*", "destination": "/api/index" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

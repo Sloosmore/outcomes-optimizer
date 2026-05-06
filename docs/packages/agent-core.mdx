@@ -1,0 +1,305 @@
+---
+title: "agent-core"
+description: "Resource discovery, process management, and epoch tracking CLI."
+---
+
+`agent-core` is the central CLI for interacting with the outcomes-optimizer database. It handles resource CRUD, process lifecycle, and epoch result recording.
+
+## Installation
+
+Pre-installed in the repo. Available via `npx agent-core`.
+
+## Commands
+
+### Resources
+
+```bash
+# List resource types
+agent-core types
+
+# Show a resource by name or UUID
+agent-core show <name>
+agent-core show --id <uuid> --json
+
+# Search resources
+agent-core search <query> --type <type> --json
+
+# Add a resource (idempotent — prints existing ID if already exists)
+agent-core resource add --name <name> --type <type> --config '{"key":"value"}'
+
+# Fetch a resource by name or ID
+agent-core resource get <name>
+agent-core resource get <name> --json
+agent-core resource get --id <uuid> --json
+
+# Remove a resource by name or ID (idempotent — no-op if already absent)
+agent-core resource remove <name>
+agent-core resource remove --name <name>
+agent-core resource remove --id <uuid>
+
+# Exclusively checkout a finite resource by UUID
+agent-core resource checkout --id <uuid> --locked-by <locker-id>
+
+# Release a checked-out resource
+agent-core resource release --id <uuid> --locked-by <locker-id>
+
+# Link resources (by name or ID)
+agent-core resource link --from <name> --to <name> --type <link_type>
+agent-core resource link --from-id <uuid> --to-id <uuid> --type <link_type>
+
+# Inspect link types and their pairing rules
+agent-core link-type list
+agent-core link-type show <name>
+agent-core link-type-rule list
+agent-core link-type-rule list --link-type registeredWith
+
+# Type-specific commands (dynamic, based on resource_types table)
+agent-core proxy list
+agent-core proxy checkout <name> --locker <id>
+agent-core proxy release <name> --locker <id>
+```
+
+### Processes
+
+```bash
+# Create a new process (prints UUID to stdout; re-running with the same name creates a distinct row)
+agent-core process init --name <name> --branch <branch> --run-type local --skill-resource-id <uuid> --channel-id <uuid>
+
+# Explicitly associate a process with a project (otherwise resolved automatically via project.json or DB)
+agent-core process init --name <name> --skill-resource-id <uuid> --project-id <project-uuid>
+
+# Update fields on an existing process
+agent-core process update --id <uuid> --channel-id <uuid>
+agent-core process update --name <name> --channel-id <uuid>
+agent-core process update --id <uuid> --worktree-path <absolute-path>
+agent-core process update --name <name> --worktree-path <absolute-path>
+
+# Check process status
+agent-core process status --name <name> --json
+agent-core process status --id <uuid> --json
+
+# Upload epoch results from workspace
+agent-core process record --id <uuid> --workspace ./workspace --epoch 3
+
+# Attach execution metadata when uploading (values override anything in epoch.json)
+agent-core process record --id <uuid> --workspace ./workspace \
+  --session-id <session-id> --cost 0.042 --duration-ms 12345
+
+# Explicit lifecycle transitions
+agent-core process active --id <uuid>
+agent-core process complete [--id <uuid>]          # falls back to EVAL_PROCESS_ID env var
+agent-core process fail [--id <uuid>] [--reason "description"]  # falls back to EVAL_PROCESS_ID env var
+
+# Sleep the current process until a future time (requires EVAL_PROCESS_ID env var)
+agent-core process sleep --interval "30 minutes"
+agent-core process sleep --interval "1 hour"
+agent-core process sleep --minutes 30
+
+# Sleep a specific process by ID (lightweight — no env var required)
+agent-core process sleep --id <uuid> --interval "30 minutes"
+
+# List processes (optionally filter by status)
+agent-core process list
+agent-core process list --status active --json
+
+# Atomically claim a waiting process (transitions waiting → active)
+agent-core process claim --id <uuid>
+
+# Restart a failed, completed, or blocked process (creates a linked child)
+agent-core process restart --id <dead-process-uuid>
+agent-core process restart --id <dead-process-uuid> --json
+
+# Block a process (hard blocker requiring human intervention)
+agent-core process block [--id <uuid>] --reason "no credentials found"
+
+# Reset a process back to pending
+agent-core process reset [--id <uuid>]
+```
+
+### Cron Schedules
+
+```bash
+# Create a cron schedule linked to a skill
+agent-core cron create --name <name> --schedule "0 3 * * *" --skill <skill-name> --prompt "Run the campaign"
+
+# List all cron schedules
+agent-core cron list
+agent-core cron list --json
+
+# Enable or disable a schedule
+agent-core cron enable --name <name>
+agent-core cron disable --name <name>
+
+# Remove a cron schedule
+agent-core cron remove --name <name>
+```
+
+Cron expressions use standard 5-field UTC syntax (`minute hour dom month dow`). Each cron resource links to exactly one skill resource via the `schedules` link type. The dispatch host's poller fires crons at the next due time. Metric collection results are recorded in `metric_snapshots`.
+
+### Metric Snapshots
+
+```bash
+# Record a metric snapshot for a skill
+agent-core metrics record --skill-id <uuid> --key <key> --value <number>
+agent-core metrics record --skill-id <uuid> --key <key> --value <number> --measured-at <iso> --metadata '{"source":"run"}'
+
+# Get the latest snapshot per metric key for a skill
+agent-core metrics latest --skill-id <uuid>
+agent-core metrics latest --skill-id <uuid> --json
+
+# Get history for a specific metric key
+agent-core metrics history --skill-id <uuid> --key <key>
+agent-core metrics history --skill-id <uuid> --key <key> --days 90 --json
+```
+
+Metric keys must be 1–128 characters (alphanumeric, underscore, dot, or dash). The `--value` option accepts any finite number. Metadata must be a JSON object. On conflict (same `skill_id`, `metric_key`, `measured_at`), the value and metadata are updated in place.
+
+### Process-Keyed Metrics
+
+`agent-core metric` (singular) records metrics keyed globally by `metric_key`, resolving the skill via the process:
+
+```bash
+# Record via process (resolves skill_resource_id automatically)
+agent-core metric record --key <key> --value <number> --process-id <uuid>
+
+# Record via skill directly
+agent-core metric record --key <key> --value <number> --skill-id <uuid>
+
+# Query latest snapshots by key (global, across all processes/skills)
+agent-core metric latest --key <key> --json
+
+# Query metric history by key
+agent-core metric history --key <key> --json
+```
+
+BFF endpoints mirror the CLI read paths:
+- `GET /api/skill-metrics/:skillId/latest` — latest snapshot per key
+- `GET /api/skill-metrics/:skillId/history?key=<key>&days=<1–3650>` — time-series history
+
+### Execute
+
+Uploads a goal file as a skill resource and launches a tmux dispatch session:
+
+```bash
+# Upload goal and launch dispatch loop
+agent-core execute [goal-path]
+agent-core execute --goal workspace/goal.md --assign-to my-agent --epochs 10
+
+# Preview without writing to DB or launching tmux
+agent-core execute --goal workspace/goal.md --dry-run --sub <user-uuid>
+```
+
+Options:
+- `[goal-path]` or `--goal <path>` — path to the goal.md file (required)
+- `--epochs <n>` — number of epochs to run (default: 10)
+- `--slug <name>` — override auto-generated slug (derived from goal file first line)
+- `--assign-to <name>` — agent or user name; creates a `runs` link from agent to skill resource
+- `--project-id <uuid>` — explicit project ID; otherwise the first project found for the user is used
+- `--sub <uuid>` — explicit user sub; bypasses local token read
+- `--unlinked` — acknowledge that no `--assign-to` is provided (passed through to dispatch)
+- `--dry-run` — print resolved values and exit without DB writes or tmux spawn
+
+The command:
+1. Reads and validates the goal file
+2. Resolves the user sub (from `--sub` or local token)
+3. Generates a slug from the goal file's first non-empty line
+4. Lists projects for the user and selects the first (override with `--project-id`)
+5. Uploads the goal as a `skill/<slug>` resource
+6. Links the skill resource to the project (if resolved)
+7. Creates a `runs` link if `--assign-to` is provided
+8. Launches `dispatch.prebuilt.mjs` in a detached tmux session (`dispatch-<resource-id>`)
+
+`WORKTREE_REPO` env var sets the working directory for tmux and the path to `dispatch.prebuilt.mjs`. Default resolution:
+
+1. `WORKTREE_REPO` env var (explicit override — always wins)
+2. When the resolved server is `self` (developer laptop), falls back to `process.cwd()` — the directory where `duoidal execute` was invoked
+3. Otherwise `/root/dispatch` (cloud runtime container path)
+
+`DISPATCH_BASE_DIR` env var (or `dispatch_base_dir` config field) sets the directory where git worktrees are created under `<base-dir>/<slug>`. Default resolution:
+
+1. `DISPATCH_BASE_DIR` env var (explicit override — always wins)
+2. `dispatch_base_dir` field in `~/.duoidal/config.json` — useful in Docker-out-of-Docker environments where the default path is not the bind-mounted one (e.g. a runtime container with `server: self` that only has `/root/dispatch` bind-mounted from the outer host)
+3. When the resolved server is `self` (developer laptop), falls back to `~/.duoidal/dispatch` — persistent per-user scratch space (survives reboots, unlike `/tmp`)
+4. Otherwise `/root/dispatch` (cloud runtime container path, bind-mounted from the host so docker-in-docker bind mounts resolve consistently)
+
+Both env vars must contain only alphanumeric characters, slashes, dots, dashes, and underscores.
+
+### Graph Traversal
+
+```bash
+# BFS traversal of the resource graph
+agent-core traverse --from <name> --via <link-type>
+agent-core traverse --from <name> --via <link-type> --direction in   # consumers (reverse edges)
+agent-core traverse --from <name> --via <link-type> --depth 5 --json
+```
+
+Options:
+- `--from <name>` (required) — starting resource name
+- `--via <link-type>` (required) — link type to follow
+- `--direction in|out` — `out` (default) follows dependencies; `in` reverses to find consumers
+- `--depth <n>` — number of hops from start node (1 = direct neighbors only, default 3, max 20)
+- `--json` — output as JSON array of resource names
+
+**Security note**: This command runs as service_role and bypasses per-user scoping (RLS is not enforced for service_role connections). It is intended for infrastructure automation and must not be exposed to untrusted operators. It requires a service-role `DATABASE_URL`.
+
+## Resource Types
+
+Resources are typed. Types are defined in the `resource_types` table and include: `data`, `identity`, `url`, `credential`, `config`, `app`, `skill`, `proxy`, `runtime`, `cron`, `package`, `service`, `repository`.
+
+Finite resource types (like `proxy`) support exclusive checkout/release.
+
+## Link Types
+
+Link types are stored in the `link_types` table and validated against `link_type_rules` at link creation time. Seeded types:
+
+| Name | Cardinality | Description |
+|------|-------------|-------------|
+| `credential` | many-to-one | Resource authenticates via this credential |
+| `proxy` | many-to-one | Resource egresses through this proxy |
+| `runsAs` | many-to-one | Deployment authenticates and runs as this identity |
+| `grants` | many-to-many | Resource grants access or permissions to another |
+| `hostedOn` | many-to-one | Resource is hosted on or runs within this infrastructure node |
+| `partOf` | many-to-one | Resource is a component or sub-resource of this parent application |
+| `dependsOn` | many-to-many | This resource depends on the target |
+| `traverses` | many-to-many | User flow traverses this package or service |
+| `registeredWith` | many-to-one | Resource was registered/created using this identity and is recoverable through it |
+| `parent` | many-to-one | **Deprecated** — use `hostedOn`, `partOf`, or `dependsOn` instead |
+
+Rules define which `from_type → to_type` pairings are allowed. A `null` from/to type acts as a wildcard. Linking resources of an invalid type pair raises an error.
+
+Current `dependsOn` rules:
+
+| From type | To type |
+|-----------|---------|
+| `skill` | `skill` |
+| `package` | `package` |
+| `service` | `package` |
+| `service` | `service` |
+
+Current `hostedOn` rules (added):
+
+| From type | To type |
+|-----------|---------|
+| `package` | `repository` |
+| `service` | `repository` |
+
+Current `traverses` rules:
+
+| From type | To type |
+|-----------|---------|
+| `skill` | `package` |
+| `skill` | `service` |
+
+## Process Lifecycle
+
+1. **init** creates a process row with status `pending`; accepts `--channel-id` to store the session routing UUID at creation time
+2. **active** transitions `pending` or `waiting` → `active`; the launch wrapper calls this before the loop starts
+3. The loop runs epochs, writing results to `workspace/epochs/{N}/epoch.json`
+4. **record** uploads epoch results to `epoch_results` and aggregates metrics on the process
+5. **status** reads back the current state including recent epoch history; includes `resumeAt` when the process is sleeping
+6. **sleep** sets status to `waiting` with a `resume_at` timestamp; the loop detects this state and exits gracefully
+7. **complete** transitions `active` → `completed`; the launch wrapper calls this when the loop exits cleanly
+8. **fail** transitions `active` or `pending` → `failed` with an optional `--reason`; called when the loop exits with a non-zero code
+9. **update** patches mutable fields (`--channel-id`, `--worktree-path`) on an existing process by `--id` or `--name`; `--worktree-path` must be an absolute filesystem path
+
+State transitions guarded at the DB level — invalid transitions (e.g. activating a terminal process) emit a warning but do not corrupt state.

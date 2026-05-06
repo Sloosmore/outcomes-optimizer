@@ -1,0 +1,17 @@
+{
+  "value_based": {
+    "name": "Value-Based",
+    "description": "Estimate action values, explore for information, exploit the best",
+    "prompt": "Estimate the value of different approaches. Early iterations: explore broadly to gather signal—even failures reveal which paths are low-value. Later iterations: exploit the highest-value approach and refine it. The goal is information, then action."
+  },
+  "policy_gradient": {
+    "name": "Policy Gradient",
+    "description": "Gradual optimization, stable updates, trust the signal",
+    "prompt": "Improve your approach incrementally through iteration. Don't swing wildly between strategies. If something works, do more of it. If something fails, do less—but don't abandon entirely. Early iterations allow larger steps. Later iterations: careful refinements. Trust the signal. Steady progress beats dramatic pivots."
+  },
+  "actor_critic": {
+    "name": "Actor-Critic",
+    "description": "Balance exploration and exploitation through uncertainty",
+    "prompt": "Balance two objectives: improving your approach AND staying curious. When uncertain, explore—try something you haven't tried. When confident, exploit—refine what works. You decide the balance based on your confidence. Don't collapse to a single strategy too early. The best solutions come from maintaining optionality until evidence is strong."
+  }
+}

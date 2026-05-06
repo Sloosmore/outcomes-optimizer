@@ -1,0 +1,37 @@
+---
+title: "sidecar"
+description: "Per-process HTTP proxy that injects X-Process-Id on all outbound requests routed through the credential proxy."
+---
+
+## Purpose
+
+A lightweight HTTP proxy that runs alongside each campaign process. It intercepts outbound requests and injects an `X-Process-Id` header before forwarding to the upstream credential proxy. This lets the credential proxy attribute requests to a specific campaign without the agent process managing the header itself.
+
+## Architecture
+
+```
+agent process → fetch('http://localhost:<sidecar-port>/...') → sidecar → credential-proxy → external API
+                                                                  ↑
+                                                     X-Process-Id injected here
+```
+
+The agent is unaware of the sidecar. It sets `CREDENTIAL_PROXY_URL` to the sidecar's port; the sidecar forwards everything upstream.
+
+## API
+
+### `createSidecar(processId, upstreamUrl)`
+
+Factory function that returns an `http.Server`. Call `.listen()` to start.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `processId` | `string` | Value injected as `X-Process-Id` on every forwarded request |
+| `upstreamUrl` | `string` | URL of the upstream proxy (e.g. `http://localhost:7447`) |
+
+### CLI
+
+```bash
+PROCESS_ID=<id> UPSTREAM_PROXY_URL=<url> npx tsx services/sidecar/index.ts
+```
+
+Prints `SIDECAR_PORT=<port>` to stdout once the server is ready. `SIDECAR_PORT=0` (default) lets the OS assign a free port.

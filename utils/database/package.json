@@ -1,0 +1,9 @@
+{
+  "name": "@skill-networks/database",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./client": "./client.ts",
+    "./schema": "./schema.ts"
+  }
+}

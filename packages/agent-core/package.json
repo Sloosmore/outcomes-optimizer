@@ -1,0 +1,31 @@
+{
+  "name": "@duoidal/agent-core",
+  "version": "0.1.0",
+  "description": "CLI for runtime discovery of all resources and exclusive checkout of finite ones",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {},
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@duoidal/config": "workspace:*",
+    "@skill-networks/agent-events": "workspace:*",
+    "@skill-networks/database": "workspace:*",
+    "@skill-networks/logger": "workspace:*",
+    "@supabase/supabase-js": "^2.91.1",
+    "commander": "^13.1.0",
+    "cron-parser": "^5.5.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

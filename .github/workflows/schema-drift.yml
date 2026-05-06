@@ -1,0 +1,65 @@
+name: Schema Drift Detection
+
+on:
+  push:
+    branches:
+      - '**'
+    paths:
+      - 'supabase/migrations/**'
+      - 'packages/database/src/schema.ts'
+      - 'drizzle.config.ts'
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'packages/database/src/schema.ts'
+      - 'drizzle.config.ts'
+  workflow_dispatch:
+
+concurrency:
+  group: schema-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-drift:
+    name: Detect schema drift
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Supabase CLI
+        run: |
+          curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | tar -xz -C /tmp
+          sudo mv /tmp/supabase /usr/local/bin/supabase
+          supabase --version
+
+      - name: Start Supabase local instance
+        run: supabase start
+
+      - name: Apply all migrations
+        run: supabase db reset
+
+      - name: Check for schema drift
+        run: |
+          OUTPUT=$(npx drizzle-kit push --url="postgresql://postgres:postgres@127.0.0.1:54322/postgres" 2>&1)
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -qiE "No changes detected|nothing to push|0 statements"; then
+            echo "No schema drift detected."
+          else
+            echo "::error::Schema drift detected — Drizzle schema does not match the migrated database. Run 'supabase db reset' locally and verify with 'npx drizzle-kit push'."
+            exit 1
+          fi

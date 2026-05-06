@@ -1,0 +1,51 @@
+{
+  "name": "@duoidal/cli",
+  "version": "0.3.13",
+  "description": "CLI for @duoidal sandbox provisioning",
+  "type": "module",
+  "bin": {
+    "duoidal": "./dist/index.js",
+    "agent-core": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prebuild": "node -e \"const{rmSync}=require('fs');rmSync('dist/bundled-skills',{recursive:true,force:true})\"",
+    "build": "tsup",
+    "postbuild": "node scripts/bundle-skills.js",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "dotenv": "^16.4.7",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.79",
+    "cli-adaptive": "workspace:*",
+    "@duoidal/agent-core": "workspace:*",
+    "@duoidal/auth": "workspace:*",
+    "@duoidal/config": "workspace:*",
+    "@duoidal/sandbox": "workspace:*",
+    "@duoidal/utils": "workspace:*",
+    "@skill-networks/agent-events": "workspace:*",
+    "@skill-networks/database": "workspace:*",
+    "@skill-networks/logger": "workspace:*",
+    "@supabase/supabase-js": "^2.91.1",
+    "@types/node": "^22.0.0",
+    "ajv": "^8.0.0",
+    "ajv-formats": "^3.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

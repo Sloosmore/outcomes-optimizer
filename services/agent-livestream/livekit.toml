@@ -1,0 +1,11 @@
+[project]
+  subdomain = "stan-2szopv5d"
+
+[agent]
+  id = "CA_riza6dmQSp2q"
+
+[agent.dispatch]
+  # No-op at runtime — the SDK doesn't read this; LK Cloud doesn't read it as a
+  # dispatch rule. Real dispatch is driven by token.ts calling
+  # AgentDispatchClient.createDispatch(roomName, 'voice-agent').
+  auto_dispatch = false

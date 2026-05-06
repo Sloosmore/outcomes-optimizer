@@ -1,0 +1,64 @@
+---
+title: "oversight"
+description: "PRD generation and validation for the optimization loop."
+---
+
+## Purpose
+
+Generates and validates Product Requirement Documents (PRDs) that structure the work the loop agent executes. Enforces feature interaction coverage and dependency ordering.
+
+## PRD Structure
+
+PRDs define stories as nodes in a dependency graph:
+
+```json
+{
+  "stories": [...],
+  "feature_interactions": {
+    "modifies": ["features this PRD changes"],
+    "related": ["features that could be affected"],
+    "interaction_matrix": [
+      { "features": ["A", "B"], "tested": true, "coverage": "story_id" }
+    ]
+  }
+}
+```
+
+## Execution Order
+
+Current execution is sequential. Planned evolution: DAG-based parallel execution by layer.
+
+| Layer | Stories |
+|---|---|
+| Layer 1 (parallel) | Stories with no dependencies |
+| Layer 2 | Stories dependent on Layer 1 |
+| Layer N | Stories whose all dependencies are satisfied |
+
+## Driver Discovery Mode
+
+When a metric cron needs driver analysis, it calls `oversight driver-discovery` to trace a metric to its highest-leverage driver and generate goal output:
+
+```bash
+oversight driver-discovery --metric <key> --output-type fix-goal|hypothesis-table [--process-id <uuid>] [--worktree-path <path>]
+```
+
+The driver-discovery mode:
+1. Loads metric history and traces HOW the metric value is produced
+2. Enumerates ALL candidate drivers with specific artifact citations (`ARTIFACT_PATH:LINE — EXCERPT`, DB field, or config.content step)
+3. Ranks candidates by leverage (estimated impact × evidence strength × tractability)
+4. Produces either a ranked hypothesis table or a complete fix-goal document with mechanically verifiable criteria
+
+## References
+
+```
+skills/oversight/
+├── SKILL.md
+└── references/
+    ├── generator.md          # PRD generation procedure
+    ├── prd-validator.md      # Validation rules
+    ├── adversarial.md        # Informed PRD generation with failure context
+    ├── comparator.md         # PRD comparison and selection
+    ├── diagnose.md           # Causal position analysis
+    ├── output-validator.md   # Blind output validation
+    └── driver-discovery.md   # Metric-agnostic driver tracing algorithm
+```

@@ -1,0 +1,25 @@
+.claude/worktrees
+.worktrees
+node_modules
+workspace
+*.log
+.git
+# Exclude all skills except the distributable ones bundled into @duoidal/cli
+skills
+!skills/create-skill
+!skills/oversight
+!skills/dispatch
+!skills/onboard
+docs
+# runtime bootstrap.sh read by sandbox.ts has try/catch fallback — exclusion intentional
+services/runtime
+# credential-proxy: deployed independently (not a Vercel build target)
+services/credential-proxy
+# agent-interceptor: deployed independently (not a Vercel build target)
+services/agent-interceptor
+# doppler-secrets: standalone utility, not a Vercel build dependency
+services/doppler-secrets
+results
+/scripts
+/drizzle
+/supabase

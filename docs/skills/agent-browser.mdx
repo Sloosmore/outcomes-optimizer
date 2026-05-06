@@ -1,0 +1,39 @@
+---
+title: "agent-browser"
+description: "Browser automation skill for agent workflows."
+---
+
+## Purpose
+
+Provides browser automation capabilities to agents. Used for tasks that require navigating websites, filling forms, clicking buttons, extracting page content, recording browser sessions, and maintaining persistent browser state across runs.
+
+## Key Capabilities (0.23+)
+
+- **Profile persistence** — persistent browser profiles via `--profile` (cookies, IndexedDB)
+- **Session management** — auto-save/restore state with `--session-name`; reuse running Chrome with `--auto-connect`
+- **State save/load** — export/import browser state as JSON via `--state`
+- **Video recording** — capture browser sessions (`record start/stop`)
+- **Trace recording** — record traces for debugging (`trace start/stop`)
+- **WebSocket streaming** — real-time browser event stream via `AGENT_BROWSER_STREAM_PORT`
+
+## Tool
+
+The skill provides the agent with procedures for common browser interactions.
+
+## Usage Pattern
+
+Skills that need browser automation import `agent-browser`:
+
+```yaml
+---
+name: create-account
+imports: [agent-browser, agent-email]
+---
+```
+
+## Files
+
+```
+skills/agent-browser/
+└── SKILL.md
+```

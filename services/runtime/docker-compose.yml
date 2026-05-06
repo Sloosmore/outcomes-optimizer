@@ -1,0 +1,68 @@
+services:
+  runtime:
+    build: .
+    image: runtime:base
+    restart: unless-stopped
+    # Tini-based init reaps zombie child processes automatically.
+    # Without this, long-running loops accumulate thousands of defunct processes
+    # (npm, node, claude, esbuild) that inflate load average and eventually make
+    # docker exec hang even when CPU is otherwise idle.
+    init: true
+    env_file: .env
+    environment:
+      # Dispatch worktrees must land on a path that the host Docker daemon can
+      # also see, because the container's `docker compose` calls out to the host
+      # via the mounted socket and any bind mount is resolved by the host's
+      # filesystem, not the container's. /root/dispatch is bind-mounted from
+      # the host at the same path (see volumes below), so worktrees created
+      # here are visible on both sides. Without this override, duoidal execute
+      # inside the container would fall back to a laptop-appropriate default
+      # that is not shared with the host and compose provisioning would fail
+      # silently with empty bind mounts.
+      - DISPATCH_BASE_DIR=/root/dispatch
+      # Make git fail fast on missing credentials instead of hanging on an
+      # interactive "Username for 'https://...':" prompt. The container has no
+      # stored GitHub credentials and the worktree provisioner's best-effort
+      # `git fetch origin main` already catches failures — this turns a 30s
+      # stdin-blocked hang into a sub-second clean failure.
+      - GIT_TERMINAL_PROMPT=0
+      # Use the duoidal binary directly instead of falling back to
+      # 'pnpm exec duoidal', which fails in /root (not a pnpm workspace).
+      # duoidal is installed at /usr/local/bin/duoidal by start.sh.
+      - SKILL_NETWORKS_CLI=duoidal
+    # Volume-mount the start script for live updates without a full image rebuild.
+    # The host path must be updated (rsync) and the container restarted to pick up changes.
+    # NOTE: after any infrastructure restart (e.g. Cloudflare overnight event), Docker will
+    # use whatever is in the image — ensure the host file and image are in sync.
+    volumes:
+      - ./start.sh:/usr/local/bin/start.sh:ro
+      # Persists Claude Code OAuth tokens across container restarts.
+      # Populate on the host: place .credentials.json inside ./claude-credentials/ (chmod 700 the dir).
+      # Mounted read-write intentionally — Claude Code auto-refreshes the token on every use,
+      # which writes the updated token back to the host directory so it survives container restarts.
+      - ./claude-credentials:/root/.claude
+      # Persists duoidal auth token across container restarts and syncs
+      # with the host so the wake scheduler can call `duoidal process resume`
+      # without re-authenticating. Read-write so the container can refresh
+      # the token and write it back to the host.
+      - /root/.config/duoidal:/root/.config/duoidal
+      # Docker-out-of-Docker: bind-mount host Docker socket + CLI so the
+      # container can manage sibling containers (e.g. sandbox provisioning).
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker:ro
+      # Docker CLI plugins (docker-compose, docker-buildx, etc.) live outside
+      # the `docker` binary. Without this mount, `docker compose` resolves to
+      # "unknown command" inside the container even though `docker` itself works.
+      - /usr/libexec/docker/cli-plugins:/usr/libexec/docker/cli-plugins:ro
+      # Shared dispatch directory: makes worktree paths visible to the host
+      # Docker daemon so compose bind mounts resolve correctly (DooD pattern).
+      - /root/dispatch:/root/dispatch
+    # Required for tigrisfs FUSE mount (R2 persistent storage)
+    devices:
+      - /dev/fuse:/dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    # Share host cgroup hierarchy so Docker-out-of-Docker can create containers.
+    cgroup: host
+    security_opt:
+      - apparmor:unconfined

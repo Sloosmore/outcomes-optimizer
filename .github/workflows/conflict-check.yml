@@ -1,0 +1,48 @@
+name: Conflict Check
+
+# When main changes, check if any open auto-merge PRs now have conflicts.
+# If so, re-trigger the PR review workflow which will resolve or flag them.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check-conflicts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find conflicting auto-merge PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get open PRs with auto-merge enabled
+          PRS=$(gh pr list --json number,headRefName,autoMergeRequest \
+            --jq '[.[] | select(.autoMergeRequest != null)] | .[].number' 2>/dev/null || true)
+
+          if [ -z "$PRS" ]; then
+            echo "No open PRs with auto-merge enabled"
+            exit 0
+          fi
+
+          for PR_NUM in $PRS; do
+            BRANCH=$(gh pr view "$PR_NUM" --json headRefName -q .headRefName)
+            echo "Checking PR #$PR_NUM ($BRANCH) for conflicts..."
+
+            git fetch origin "$BRANCH" 2>/dev/null || continue
+
+            # Trial merge — if it fails, there are conflicts
+            if git merge-tree --write-tree origin/main "origin/$BRANCH" > /dev/null 2>&1; then
+              echo "  PR #$PR_NUM: clean merge, skipping"
+            else
+              echo "  PR #$PR_NUM: CONFLICTS DETECTED — re-triggering review"
+              gh workflow run pr-review.yml -F pr_number="$PR_NUM"
+            fi
+          done

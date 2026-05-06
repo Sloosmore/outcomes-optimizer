@@ -1,0 +1,58 @@
+---
+title: "Skills Overview"
+description: "Version-controlled agent capabilities that evolve through execution experience."
+---
+
+Skills live in `skills/`. Each skill is a `SKILL.md` file that the agent loads and executes.
+
+## Structure
+
+```
+skills/
+├── dispatch/         # Interview → GOAL.md → worktree → loop
+├── agent-browser/    # Browser automation
+├── agent-email/      # Email workflow skill
+├── agent-instagram/  # Instagram posting skill
+├── agent-media/      # Media generation skill
+└── oversight/        # PRD generation + validation
+```
+
+## SKILL.md Format
+
+```yaml
+---
+name: skill-name
+description: What this skill accomplishes
+imports: [dep-skill]
+allowed-tools: "Bash Read"
+---
+
+(body: procedure / workflow)
+
+---
+rubric:
+  check: "specific success criteria"
+  artifacts:
+    - type: link
+      spec: "URL returns 200"
+---
+```
+
+## Installing Skills
+
+Skills from GitHub repos can be installed with:
+
+```bash
+npx skills add owner/repo
+```
+
+Skills are installed to `~/.claude/skills/` (Claude Code adapter) and are available at the next session start.
+
+## Skills Spectrum
+
+| Position | Description | External refs? |
+|---|---|---|
+| HOW (tools) | Stable interfaces to external systems | No |
+| HOW (impl) | Platform-specific implementations | Yes |
+| Mixed | Compositions of implementations | Maybe |
+| WHAT | Pure orchestration / strategy | No |

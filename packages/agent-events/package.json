@@ -1,0 +1,30 @@
+{
+  "name": "@skill-networks/agent-events",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@skill-networks/logger": "workspace:*",
+    "@supabase/supabase-js": "^2.39.0"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.0",
+    "vitest": "^4.0.17"
+  }
+}

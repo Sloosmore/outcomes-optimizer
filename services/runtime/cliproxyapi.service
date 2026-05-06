@@ -1,0 +1,14 @@
+[Unit]
+Description=CLIProxyAPI credential broker
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/cliproxyapi
+ExecStart=/opt/cliproxyapi/CLIProxyAPI -config config.yaml
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/cliproxyapi/cliproxyapi.log
+StandardError=append:/opt/cliproxyapi/cliproxyapi.log
+
+[Install]
+WantedBy=multi-user.target

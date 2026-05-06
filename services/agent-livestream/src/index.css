@@ -1,0 +1,356 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: 'Geist Variable', sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --text-2xs: 0.65rem;
+  --text-2xs--line-height: 0.9rem;
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Gray scale — linear OKLCH steps (chroma=0, no hue shift)
+   L: 1.00 → 0.14 across 8 even steps (~0.12 per step)
+   ─────────────────────────────────────────────────────
+   gray-0  1.000  background (white)
+   gray-1  0.970  surface / sidebar / muted bg
+   gray-2  0.880  border / input
+   gray-3  0.750  ring / dividers
+   gray-4  0.500  foreground — WCAG AA on white (~5.5:1), default body text
+   gray-4.5 0.580 muted-foreground — secondary/de-emphasized text (~4.3:1, WCAG AA large text only)
+   gray-5  0.400  secondary-foreground — section headers, node titles
+   gray-6  0.250  primary / high-emphasis
+   gray-7  0.140  near black, max contrast
+   ───────────────────────────────────────────────────── */
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.985 0.005 90);     /* warm off-white */
+  --foreground: oklch(0.200 0.005 90);     /* near-black */
+  --card: oklch(0.985 0.005 90);
+  --card-foreground: oklch(0.200 0.005 90);
+  --popover: oklch(0.985 0.005 90);
+  --popover-foreground: oklch(0.200 0.005 90);
+  --primary: oklch(0.250 0 0);            /* gray-6 — unchanged */
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.965 0.008 85);      /* warm cream */
+  --secondary-foreground: oklch(0.400 0.005 90);
+  --muted: oklch(0.965 0.008 85);
+  --muted-foreground: oklch(0.450 0.005 90);
+  --accent: oklch(0.965 0.008 85);
+  --accent-foreground: oklch(0.250 0 0);  /* gray-6 — unchanged */
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.935 0.008 85);         /* warm beige */
+  --input: oklch(0.935 0.008 85);
+  --ring: oklch(0.850 0.005 90);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --sidebar: oklch(0.975 0.006 90);
+  --sidebar-foreground: oklch(0.450 0.005 90);
+  --sidebar-primary: oklch(0.250 0 0);    /* gray-6 */
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.935 0.008 85);
+  --sidebar-accent-foreground: oklch(0.250 0 0);
+  --sidebar-border: oklch(0.935 0.008 85);
+  --sidebar-ring: oklch(0.850 0.005 90);
+}
+
+.dark {
+  --background: oklch(0.140 0 0);          /* gray-7 */
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.210 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.210 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.920 0 0);
+  --primary-foreground: oklch(0.210 0 0);
+  --secondary: oklch(0.270 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.270 0 0);
+  --muted-foreground: oklch(0.650 0 0);   /* slightly brighter for dark legibility */
+  --accent: oklch(0.270 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.560 0 0);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --sidebar: oklch(0.210 0 0);
+  --sidebar-foreground: oklch(0.650 0 0); /* matches muted-foreground in dark */
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.270 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.560 0 0);
+}
+
+@layer base {
+  :root {
+    /* Natural dimensions for rail-tile thumbnail iframes. The iframe lays out
+     * at this size and is scaled down visually so inner HTML keeps its real
+     * layout instead of reflowing into the tiny rail box. */
+    --rail-thumb-w: 1280px;
+    --rail-thumb-h: 720px;
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+    height: 100dvh;
+  }
+  body, #root {
+    height: 100%;
+  }
+}
+
+/* tw-shimmer inlined — @import "tw-shimmer/src/index.css" not processed by @tailwindcss/vite */
+@property --shimmer-track-height {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 200px;
+}
+
+@property --shimmer-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 15deg;
+}
+
+@theme inline {
+  @keyframes tw-shimmer {
+    from {
+      background-position: 100% 0;
+    }
+  }
+}
+
+@utility shimmer {
+  --_gradient-width: calc(var(--_spread) + var(--shimmer-track-height) * tan(var(--shimmer-angle)));
+  --_active-distance: calc(var(--shimmer-track-width, 200px) + var(--_gradient-width));
+  --_duration: var(--shimmer-duration, calc(var(--_active-distance) / var(--_speed) / 1px * 1000));
+  --_repeat-delay: var(--shimmer-repeat-delay, calc(20000 / var(--_speed)));
+  --_repeat-delay-px: calc(var(--_repeat-delay) * var(--_active-distance) / var(--_duration));
+  --_xy-offset-px: calc((var(--shimmer-x, 0) + var(--shimmer-y, 0) * tan(var(--shimmer-angle))) * 1px);
+
+  --_bg-width: calc(
+    100% +
+    var(--shimmer-track-width, 100%) +
+    var(--_gradient-width) +
+    var(--_repeat-delay-px)
+  );
+
+  --_position: calc(
+    var(--shimmer-track-width, (100% - var(--_gradient-width) - var(--_repeat-delay-px)) / 2)
+    + var(--_gradient-width) / 2
+    + var(--_repeat-delay-px)
+    - var(--_xy-offset-px)
+  );
+
+  &:not(.shimmer-bg) {
+    --_speed: var(--shimmer-speed, 200);
+    --_spread: var(--shimmer-spread, calc(4ch + 80px));
+    --_bg: currentColor;
+    --_fg: var(--shimmer-color, oklch(from currentColor l c h / calc(alpha * 0.2)));
+
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  &.shimmer-bg {
+    --_speed: var(--shimmer-speed, 1000);
+    --_spread: var(--shimmer-spread, 480px);
+    --_bg: transparent;
+    --_fg: var(--shimmer-color, oklch(from currentColor 0 c h / 0.06));
+  }
+
+  @variant dark {
+    &:not(.shimmer-bg) {
+      --_fg: var(--shimmer-color, oklch(from currentColor max(0.8, calc(l + 0.4)) c h / calc(alpha + 0.4)));
+    }
+    &.shimmer-bg {
+      --_fg: var(--shimmer-color, oklch(from currentColor 0 c h / 0.30));
+    }
+  }
+
+  @-moz-document url-prefix() {
+    & {
+      --_duration: var(--shimmer-duration, calc(375000 / var(--_speed)));
+    }
+  }
+
+  --_mix-96: color-mix(in oklch, var(--_fg), var(--_bg) 96%);
+  --_mix-83: color-mix(in oklch, var(--_fg), var(--_bg) 83%);
+  --_mix-67: color-mix(in oklch, var(--_fg), var(--_bg) 67%);
+  --_mix-50: color-mix(in oklch, var(--_fg), var(--_bg) 50%);
+  --_mix-33: color-mix(in oklch, var(--_fg), var(--_bg) 33%);
+  --_mix-17: color-mix(in oklch, var(--_fg), var(--_bg) 17%);
+  --_mix-4: color-mix(in oklch, var(--_fg), var(--_bg) 4%);
+
+  background:
+    linear-gradient(
+      calc(90deg + var(--shimmer-angle)),
+      var(--_bg) calc(var(--_position) - var(--_spread) * 0.5),
+      var(--_mix-96) calc(var(--_position) - var(--_spread) * 0.44),
+      var(--_mix-83) calc(var(--_position) - var(--_spread) * 0.37),
+      var(--_mix-67) calc(var(--_position) - var(--_spread) * 0.31),
+      var(--_mix-50) calc(var(--_position) - var(--_spread) * 0.25),
+      var(--_mix-33) calc(var(--_position) - var(--_spread) * 0.19),
+      var(--_mix-17) calc(var(--_position) - var(--_spread) * 0.12),
+      var(--_mix-4) calc(var(--_position) - var(--_spread) * 0.06),
+      var(--_fg) var(--_position),
+      var(--_mix-4) calc(var(--_position) + var(--_spread) * 0.06),
+      var(--_mix-17) calc(var(--_position) + var(--_spread) * 0.12),
+      var(--_mix-33) calc(var(--_position) + var(--_spread) * 0.19),
+      var(--_mix-50) calc(var(--_position) + var(--_spread) * 0.25),
+      var(--_mix-67) calc(var(--_position) + var(--_spread) * 0.31),
+      var(--_mix-83) calc(var(--_position) + var(--_spread) * 0.37),
+      var(--_mix-96) calc(var(--_position) + var(--_spread) * 0.44),
+      var(--_bg) calc(var(--_position) + var(--_spread) * 0.5)
+    )
+    0 0 / var(--_bg-width) 100%
+    no-repeat;
+
+  animation: tw-shimmer 1s linear 0s infinite backwards;
+  animation-duration: calc((var(--_duration) + var(--_repeat-delay)) * 1ms);
+}
+
+@utility shimmer-speed-* {
+  --shimmer-speed: --value(number);
+}
+
+@utility shimmer-duration-* {
+  --shimmer-duration: --value(integer);
+}
+
+@utility shimmer-repeat-delay-* {
+  --shimmer-repeat-delay: --value(integer);
+}
+
+@utility shimmer-invert {
+  &:not(.shimmer-bg) {
+    --shimmer-color: oklch(from currentColor min(calc(l - 0.4), 0.2) c h / calc(alpha + 0.4));
+
+    @variant dark {
+      --shimmer-color: oklch(from currentColor l c h / calc(alpha * 0.2));
+    }
+  }
+}
+
+@utility shimmer-color-* {
+  --alpha: 100%;
+  --alpha: calc(--modifier(integer) * 1%);
+  --shimmer-color: --alpha(--value(--color, [color]) / var(--alpha, 100%));
+}
+
+@utility shimmer-spread-* {
+  --shimmer-spread: calc(--value(integer) * 1px);
+}
+
+@utility shimmer-angle-* {
+  --shimmer-angle: calc(--value(integer) * 1deg);
+}
+
+@utility shimmer-container {
+  container-type: inline-size;
+
+  & .shimmer {
+    --shimmer-track-width: 100cqw;
+    --shimmer-track-height: max(100cqh, 50cqw, 200px);
+  }
+}
+
+/* ── Agent Orb Blob ──────────────────────────────────────────────────────── */
+
+@theme inline {
+  @keyframes orb-morph {
+    0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; transform: scale(1); }
+    20%       { border-radius: 40% 60% 70% 30% / 30% 70% 40% 60%; transform: scale(1.04); }
+    40%       { border-radius: 50% 50% 30% 70% / 40% 60% 40% 60%; transform: scale(0.96); }
+    60%       { border-radius: 30% 70% 50% 60% / 60% 30% 60% 40%; transform: scale(1.03); }
+    80%       { border-radius: 70% 30% 40% 60% / 50% 60% 30% 70%; transform: scale(0.98); }
+  }
+  @keyframes orb-morph-slow {
+    0%, 100% { border-radius: 55% 45% 35% 65% / 55% 35% 65% 45%; transform: scale(1); }
+    50%       { border-radius: 45% 55% 65% 35% / 45% 65% 35% 55%; transform: scale(1.02); }
+  }
+}
+
+/* CSS blob fill — uses --orb-hex / --orb-hex2 passed as inline CSS variables */
+.orb-blob-fill {
+  background: radial-gradient(
+    ellipse at 38% 32%,
+    color-mix(in srgb, var(--orb-hex) 75%, white) 0%,
+    var(--orb-hex) 50%,
+    color-mix(in srgb, var(--orb-hex) 88%, black) 100%
+  );
+  box-shadow:
+    0 0 14px 4px color-mix(in srgb, var(--orb-hex) 45%, transparent),
+    0 0 32px 10px color-mix(in srgb, var(--orb-hex) 20%, transparent);
+}
+
+@utility animate-orb-morph {
+  animation: orb-morph 3.5s ease-in-out infinite;
+}
+
+@utility animate-orb-morph-slow {
+  animation: orb-morph-slow 6s ease-in-out infinite;
+}
+
+/* Terrain mode — hide nodes and edges, show only contour lines */
+.terrain-mode .react-flow__nodes,
+.terrain-mode .react-flow__edges {
+  opacity: 0;
+  pointer-events: none;
+}

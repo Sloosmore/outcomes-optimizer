@@ -1,0 +1,71 @@
+name: Publish CLI to npm
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/duoidal-cli/**'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Get published version
+        id: published_version
+        run: |
+          PUBLISHED=$(npm view @duoidal/cli version 2>/dev/null || echo "0.0.0")
+          echo "version=$PUBLISHED" >> $GITHUB_OUTPUT
+
+      - name: Ensure version is ahead of published
+        run: |
+          cd packages/duoidal-cli
+          LOCAL=$(node -p "require('./package.json').version")
+          PUBLISHED="${{ steps.published_version.outputs.version }}"
+          echo "Local: $LOCAL, Published: $PUBLISHED"
+          # Use node to compare — returns true if local > published
+          IS_AHEAD=$(node -e "
+            const [a,b] = ['$LOCAL','$PUBLISHED'].map(v => v.split('.').map(Number));
+            const gt = a[0]>b[0] || (a[0]===b[0] && a[1]>b[1]) || (a[0]===b[0] && a[1]===b[1] && a[2]>b[2]);
+            console.log(gt)
+          ")
+          if [ "$IS_AHEAD" != "true" ]; then
+            # Bump patch from published version to get one ahead
+            NEXT=$(node -e "
+              const [maj,min,pat] = '$PUBLISHED'.split('.').map(Number);
+              console.log(maj+'.'+min+'.'+(pat+1))
+            ")
+            npm version "$NEXT" --no-git-tag-version
+            echo "Auto-bumped to $NEXT"
+          else
+            echo "Local $LOCAL is already ahead of published $PUBLISHED"
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build dependencies
+        run: pnpm --filter @duoidal/cli^... build
+
+      - name: Build
+        run: pnpm --filter @duoidal/cli build
+
+      - name: Publish to npm
+        run: npm publish --access public
+        working-directory: packages/duoidal-cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,22 @@
+{
+  "name": "@duoidal/utils",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./dispatch": "./dispatch/dispatch.ts",
+    "./loop": "./loop/index.ts",
+    "./run": "./run/index.ts",
+    "./cli": "./cli/index.ts",
+    "./sync": "./sync/index.ts",
+    "./types": "./types.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.79",
+    "@anthropic-ai/sdk": "^0.80.0",
+    "@duoidal/agent-core": "workspace:*",
+    "@skill-networks/agent-events": "workspace:*",
+    "@skill-networks/database": "workspace:*",
+    "@supabase/supabase-js": "^2.91.1"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@skill-networks/artifact-router",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node --import tsx/esm src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@skill-networks/artifact-url": "workspace:*",
+    "@supabase/supabase-js": "^2.0.0",
+    "tsx": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  }
+}

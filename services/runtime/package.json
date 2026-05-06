@@ -1,0 +1,9 @@
+{
+  "name": "@skill-networks/runtime",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Runtime service (wake-scheduler and cron poller)",
+  "dependencies": {
+    "@skill-networks/database": "workspace:*"
+  }
+}

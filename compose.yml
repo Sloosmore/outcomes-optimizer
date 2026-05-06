@@ -1,0 +1,150 @@
+# Compose manifest for the monorepo dev/eval environment.
+# Invoked by the compose provisioner as:
+#   COMPOSE_PROJECT_NAME=wt-<slug> docker compose up -d --wait
+#
+# WORKTREE_PATH must be set by the caller to the absolute path of the worktree.
+# Default falls back to /workspace for local use.
+#
+# Dynamic ports (container-port-only syntax) let the OS pick a free host port —
+# never hardcode a host port so multiple worktrees can run concurrently.
+
+services:
+
+  # ── Init services ─────────────────────────────────────────────────────────
+  # These run to completion (exit 0) before long-running services start.
+  # Each owns its own skip logic via a hash sentinel file.
+
+  pnpm-install:
+    image: node:22-alpine
+    restart: "no"
+    working_dir: /workspace
+    volumes:
+      - type: bind
+        source: ${WORKTREE_PATH:-/workspace}
+        target: /workspace
+      - type: bind
+        source: ${WORKTREE_PATH:-.}/.docker/pnpm-install.sh
+        target: /entrypoint.sh
+        read_only: true
+    entrypoint: ["sh", "/entrypoint.sh"]
+    command: []
+    environment:
+      - COREPACK_ENABLE_STRICT=0
+
+  build-packages:
+    image: node:22-alpine
+    restart: "no"
+    depends_on:
+      pnpm-install:
+        condition: service_completed_successfully
+    working_dir: /workspace
+    volumes:
+      - type: bind
+        source: ${WORKTREE_PATH:-/workspace}
+        target: /workspace
+      - type: bind
+        source: ${WORKTREE_PATH:-.}/.docker/build-packages.sh
+        target: /entrypoint.sh
+        read_only: true
+    entrypoint: ["sh", "-c", "corepack enable pnpm && sh /entrypoint.sh"]
+    command: []
+    environment:
+      - COREPACK_ENABLE_STRICT=0
+
+  database:
+    # Migration-aware postgres: builds image with migrations baked in via Dockerfile COPY.
+    # Bind mounts are not used because this runs in a Docker-in-Docker environment where
+    # the outer Docker engine cannot see the inner container's filesystem.
+    # No profile gate — starts by default so acceptance criteria can be verified (same as before).
+    build:
+      context: .
+      dockerfile: .docker/postgres-supabase.Dockerfile
+    restart: "no"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Long-running services ──────────────────────────────────────────────────
+  # All long-running services depend on build-packages so workspace packages
+  # are built before any service tries to import them.
+
+  credential-proxy:
+    profiles: [proxy]
+    build:
+      context: .
+      dockerfile: services/credential-proxy/Dockerfile
+    ports:
+      - "3000"
+    depends_on:
+      build-packages:
+        condition: service_completed_successfully
+      database:
+        condition: service_healthy
+    environment:
+      - CREDENTIAL_PROXY_PORT=3000
+      - DATABASE_URL=postgresql://postgres:postgres@database:5432/postgres
+      - DOPPLER_TOKEN
+      - DOPPLER_SERVICE_TOKEN
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  dashboard-bff:
+    profiles: [dashboard]
+    build:
+      context: .
+      dockerfile: services/agent-livestream/Dockerfile
+    ports:
+      - "3001"
+    depends_on:
+      database:
+        condition: service_healthy
+      build-packages:
+        condition: service_completed_successfully
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@database:5432/postgres
+      # All three are required at runtime. Set them in `.env` (compose
+      # auto-loads it) or in your shell. For Supabase local-dev the canonical
+      # values come from `supabase status` after `supabase start`.
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - SUPABASE_URL=${SUPABASE_URL:-http://localhost:54321}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  dashboard-vite:
+    profiles: [dashboard]
+    build:
+      context: .
+      dockerfile: services/agent-livestream/Dockerfile
+    ports:
+      - "5173"
+    depends_on:
+      build-packages:
+        condition: service_completed_successfully
+    environment:
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-http://localhost:54321}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - BFF_PROXY_URL=http://dashboard-bff:3001
+    command: ["npm", "run", "dev", "--", "--port", "5173", "--host", "0.0.0.0"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s

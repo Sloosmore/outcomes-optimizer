@@ -1,0 +1,147 @@
+---
+title: "dispatch"
+description: "Takes an existing goal file (workspace/goal-<slug>.md or workspace/goal.md) and dispatches it to a runner. Use create-skill first to generate the goal."
+---
+
+## Purpose
+
+`dispatch` takes a finished goal file and ships it to a runner. It does **not** interview or generate goals — use the `create-skill` skill for that.
+
+If the resolved goal file does not exist, dispatch stops and tells the user to run `create-skill` first.
+
+## Goal File Resolution
+
+Dispatch resolves the goal file in this order:
+
+1. **Argument** — if a path is passed (e.g. `/dispatch workspace/goal-credential-vault-link.md`), use it.
+2. **Context argument** — if the skill was invoked with a context argument specifying a path, use it.
+3. **Default** — `workspace/goal.md`.
+
+## Workflow
+
+1. **create-skill** — interview the user, research the domain, write `workspace/goal-<slug>.md`
+2. **dispatch** — upload the goal to DB, ask where to run, execute
+
+## Phases
+
+| Phase | Action |
+|---|---|
+| Pre: Context | Read context argument for goal file path or overrides. |
+| 1: Where? | **Default is `duoidal execute` (runner.md).** Load `references/runner.md` before proceeding. |
+| 2: Upload Goal | Upload resolved goal file to DB as a skill resource via `agent-core execute`, capturing `SKILL_RESOURCE_ID`. |
+| 2b: Runs Link | Pass `--assign-to` to `agent-core execute` to create a `runs` link. Use `--unlinked` to bypass. |
+| 2c: Project ID | Resolve the user's project resource via `agent-core search`. Pass `--project-id` if found; warn and continue if not. |
+| 3: Execute | Follow `references/runner.md` exactly. |
+| 4: Confirm | Tell the user where the loop is running and how to observe it. |
+
+## Run Types
+
+| Type | Description | Reference | DB `run_type` | Branch Prefix |
+|---|---|---|---|---|
+| `runner` | Default: `duoidal execute` handles worktree provisioning, process tracking, and tmux launch | `skills/dispatch/references/runner.md` | `local` | `feat/` |
+
+**DB `run_type`** is the value passed to `agent-core process init --run-type`. It controls how the process is tracked in the database and which execution infrastructure handles the loop.
+
+## GOAL.md Format
+
+```markdown
+# Goal: [title — max 8 words]
+
+[1-2 sentence description]
+
+## Architecture
+
+[1-2 mermaid diagrams]
+
+## Prerequisites
+
+[Services, credentials, or infrastructure that must exist before the loop starts. "None" if no external dependencies.]
+
+## Success Criteria
+
+- **[Criterion]**: [verification method] → [what the real system confirms]
+- **[Non-regression]**: [what existing behavior must still work]
+
+## Metrics
+
+[For scalar goals: table of fields with type, direction (maximize/minimize), and target. For boolean goals: "None — all criteria are pass/fail."]
+
+## Constraints
+
+[Constraints or "None"]
+
+## Post-Loop Action
+
+[Exact steps: filled in by dispatch from the reference's Completion section]
+```
+
+## Files
+
+```
+skills/create-skill/
+├── SKILL.md
+└── references/
+    ├── simulations.md           # Simulation guidance
+    └── validation-examples.md   # Calibration examples for validation plans
+
+skills/dispatch/
+├── SKILL.md
+└── references/
+    └── runner.md    # Default dispatch via duoidal execute
+```
+
+---
+
+## Full Flow Taxonomy
+
+Every dispatch runs the same three-phase spine. Individual steps activate or scale depending on the task type — infrastructure tasks lean heavily on Phase 2 verification; docs changes barely touch it.
+
+### Phase 1 — Goal Creation (create-skill)
+
+| Step | Description | Universal? |
+|------|-------------|------------|
+| **1a. Idea capture** | Voice or text interview surfaces intent, constraints, success criteria | Always |
+| **1b. Context retrieval** | Agent searches codebase during interview to ask specific follow-ups | Always — quality varies |
+| **1c. Goal synthesis** | Verifiable GOAL.md written with mechanically checkable success criteria | Always |
+
+### Phase 1d — Setup (dispatch)
+
+| Step | Description | Universal? |
+|------|-------------|------------|
+| **1d. Goal upload** | Resolved goal file (e.g. `workspace/goal-<slug>.md`) uploaded to DB as skill resource, `SKILL_RESOURCE_ID` captured | Always |
+| **1e. Environment setup** | Git worktree created, branch named, workspace initialized | Always |
+
+### Phase 2 — Agent Work
+
+| Step | Description | Universal? |
+|------|-------------|------------|
+| **2a. Prompt construction** | SYSTEM.md + goal + `$EPOCH`/`$MAX_EPOCHS` injected | Always |
+| **2b. Skill sync** | Skills pulled from DB/GitHub before each session | Always |
+| **2c. Session execution** | Claude spawned, does the work, writes `progress.md` | Always |
+| **2d. Completion check** | `isCompleteSignal` scans `progress.md` for COMPLETE | Always |
+| **2e. Thrashing detection** | `state.json` hash compared epoch-over-epoch | Always |
+| **2f. Test gate** | `npm test` / `npm run lint` must pass before COMPLETE | Feature-specific |
+| **2g. Live verification** | DB queries, API calls, endpoint checks against the real system | Feature-specific |
+
+### Phase 3 — Outcome Processing
+
+| Step | Description | Universal? |
+|------|-------------|------------|
+| **3a. Workspace cleanup** | `workspace/` stripped from diff before PR | Always |
+| **3b. PR creation** | `gh pr create` + auto-merge enabled | Always |
+| **3c. Review loop** | Severity reviewer + score reviewer, up to 5 rounds | Always |
+| **3d. Fix or escalate** | ≥60% confidence → fix directly, else request-changes | Always |
+| **3e. Docs update** | `.mdx` files updated if changed files have corresponding docs | Feature-specific |
+| **3f. PR merge** | Auto-merge fires after approval | Always |
+| **3g. Process resolution** | Process row in DB marked completed, `pr_url` set | Always — webhook-driven (in progress) |
+| **3h. Learning capture** | What worked, what the loop struggled with, what review caught | Not yet implemented |
+
+### Leverage Points
+
+| Step | Gap |
+|------|-----|
+| **1b** context retrieval | Interview is blind to the codebase — questions are generic, not codebase-specific |
+| **2a** prompt construction | SYSTEM.md is static per epoch — no "here's what failed last time" injection |
+| **2h** live verification | Agents self-certify; oversight catches this but the goal spec must demand live checks |
+| **3g** process resolution | Manual today — webhook campaign automates this |
+| **3h** learning capture | Doesn't exist — every run discards signal about what worked and what didn't |

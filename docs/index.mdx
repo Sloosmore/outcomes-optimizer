@@ -1,0 +1,28 @@
+---
+title: Outcomes Optimizer
+description: Agent skill library and optimization infrastructure
+---
+
+# Outcomes Optimizer
+
+Trainable agent capabilities through version-controlled skills that evolve via execution experience.
+
+## Packages
+
+| Package | Description |
+|---|---|
+| `agent-media` | Generate images, video, and audio via fal.ai and Gemini |
+| `throwmail` | Temporary email inboxes for verification flows |
+| `agent-browser` | Browser automation for web tasks |
+| `agent-core` | Resource discovery, process management, epoch tracking |
+
+## Skills
+
+Skills are version-controlled capabilities in `skills/`. Agents load them at runtime.
+
+## Architecture
+
+- **packages/** — CLI tools
+- **skills/** — Versioned capabilities
+- **utils/** — System infrastructure
+- **services/** — Deployed services

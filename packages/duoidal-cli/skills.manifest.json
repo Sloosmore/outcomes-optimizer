@@ -1,0 +1,4 @@
+{
+  "skillsDir": "../../skills",
+  "distributable": ["create-skill", "oversight", "dispatch", "onboard"]
+}

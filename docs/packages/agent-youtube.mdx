@@ -1,0 +1,33 @@
+---
+title: "agent-youtube"
+description: "CLI for uploading and managing YouTube videos."
+---
+
+## Install
+
+```bash
+npx agent-youtube --help
+```
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `agent-youtube upload <file>` | Upload video to YouTube |
+| `agent-youtube status <id>` | Check upload and processing status |
+| `agent-youtube list` | List uploaded videos |
+
+## Quota
+
+YouTube Data API v3 quota: 100 uploads per day.
+
+## Files
+
+```
+packages/agent-youtube/
+├── src/
+│   ├── commands/
+│   └── index.ts
+└── bin/
+    └── agent-youtube.js
+```

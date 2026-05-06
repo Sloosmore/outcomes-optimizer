@@ -1,0 +1,133 @@
+name: Rebase Audit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: rebase-audit-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  rebase-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Check for silently dropped files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF_NAME: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Validate BASE_REF_NAME before any git use
+          if ! git check-ref-format "refs/heads/$BASE_REF_NAME"; then
+            echo "::error::Invalid BASE_REF_NAME (failed ref-format check)"
+            exit 1
+          fi
+
+          # Validate HEAD_SHA is a 40-char hex string (upper or lowercase)
+          if ! [[ "$HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::Invalid HEAD_SHA format"
+            exit 1
+          fi
+
+          # Validate REPO format (owner/repo) — GitHub controls this value but be consistent
+          if ! [[ "$REPO" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]]; then
+            echo "::error::Invalid REPO format"
+            exit 1
+          fi
+
+          BASE_REF="origin/$BASE_REF_NAME"
+          # Sanitize for safe use in markdown comment body
+          SAFE_BASE_REF_NAME=$(echo "$BASE_REF_NAME" | tr -cd 'a-zA-Z0-9/_.-')
+
+          MERGE_BASE=$(git merge-base -- "$BASE_REF" "$HEAD_SHA")
+
+          # Files added or modified in any commit on the branch.
+          # Excludes D (deletions) and R (renames) to avoid false positives:
+          # - A file added then deleted on the same branch has no net change — correct to skip.
+          # - A renamed+modified file records the old name in log but new name in diff.
+          # Note: no -- before the range; -- before paths misinterprets the range as a pathspec.
+          RAW_COMMITTED=$(git log --diff-filter=ACM --name-only --pretty=format: "$MERGE_BASE".."$HEAD_SHA")
+          COMMITTED_FILES=$(echo "$RAW_COMMITTED" | LC_ALL=C sort -u | grep -v '^$' || true)
+
+          # Early exit if no files were added or modified on the branch
+          if [ -z "$COMMITTED_FILES" ]; then
+            echo "Rebase audit passed — no files to audit."
+            exit 0
+          fi
+
+          # Files that actually differ in the final state (two-dot: merge-base to HEAD).
+          # --no-renames keeps filenames consistent with the log output above.
+          # Known limitation: if a file was renamed on the base branch after the PR fork point
+          # and the branch's rebase absorbed that rename, the old filename may appear in
+          # COMMITTED_FILES but not DIFF_FILES, producing a spurious dropped-file warning.
+          # Such cases can be safely dismissed.
+          RAW_DIFF=$(git diff --no-renames --name-only "$MERGE_BASE".."$HEAD_SHA")
+          DIFF_FILES=$(echo "$RAW_DIFF" | LC_ALL=C sort -u | grep -v '^$' || true)
+
+          # Subtract any files explicitly deleted on the branch from COMMITTED_FILES.
+          # A file added then deleted within the branch is not a rebase drop.
+          RAW_DELETED=$(git log --diff-filter=D --name-only --pretty=format: "$MERGE_BASE".."$HEAD_SHA")
+          DELETED_FILES=$(echo "$RAW_DELETED" | LC_ALL=C sort -u | grep -v '^$' || true)
+          if [ -n "$DELETED_FILES" ]; then
+            COMMITTED_FILES=$(comm -23 <(echo "$COMMITTED_FILES") <(echo "$DELETED_FILES") || true)
+          fi
+
+          # Dropped = committed but not in final diff
+          DROPPED=$(comm -23 <(echo "$COMMITTED_FILES") <(echo "$DIFF_FILES") || true)
+
+          MARKER="<!-- rebase-audit -->"
+
+          if [ -n "$DROPPED" ]; then
+            echo "::warning::Silently dropped files detected after rebase"
+
+            # Escape backticks only — filenames come from git (trusted) and go inside a code fence
+            DROPPED_SAFE=$(echo "$DROPPED" | sed 's/`/\\`/g')
+
+            # Build body line-by-line to avoid YAML indentation rendering as code blocks
+            BODY="$MARKER"$'\n'
+            BODY+="## Rebase Audit Warning"$'\n\n'
+            BODY+="The following files were modified in branch commits but have **no net change** against \`$SAFE_BASE_REF_NAME\`. This can happen when rebase conflict resolution silently drops changes."$'\n\n'
+            BODY+="\`\`\`"$'\n'
+            BODY+="$DROPPED_SAFE"$'\n'
+            BODY+="\`\`\`"$'\n\n'
+            BODY+="**Context:** PR #378's JWT middleware was silently deleted by PR #391's rebase — this check exists to prevent that class of failure. Please verify these files are intentionally unchanged, or restore the missing changes."$'\n\n'
+            BODY+="> If this is intentional (e.g., a revert or cleanup), dismiss this warning."
+
+            # Update existing comment if one exists (with pagination), otherwise create new.
+            # Pipe to standalone jq with --arg (gh api does not forward --arg to jq).
+            # Validate comment ID is numeric before injecting into URL.
+            EXISTING_COMMENT_ID=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments" \
+              2>/dev/null | jq -r --arg marker "$MARKER" '.[] | select(.body | startswith($marker)) | .id' \
+              | head -1)
+            if [ -n "$EXISTING_COMMENT_ID" ] && [[ "$EXISTING_COMMENT_ID" =~ ^[0-9]+$ ]]; then
+              gh api "repos/$REPO/issues/comments/$EXISTING_COMMENT_ID" -X PATCH -f body="$BODY" >/dev/null || echo "::warning::Failed to update PR comment"
+            else
+              gh pr comment "$PR_NUMBER" --body "$BODY" || echo "::warning::Failed to post PR comment"
+            fi
+
+            exit 0
+          else
+            echo "Rebase audit passed — no dropped files detected."
+
+            # Clean up any stale warning comment from a previous failed push
+            EXISTING_COMMENT_ID=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments" \
+              2>/dev/null | jq -r --arg marker "$MARKER" '.[] | select(.body | startswith($marker)) | .id' \
+              | head -1)
+            if [ -n "$EXISTING_COMMENT_ID" ] && [[ "$EXISTING_COMMENT_ID" =~ ^[0-9]+$ ]]; then
+              gh api "repos/$REPO/issues/comments/$EXISTING_COMMENT_ID" -X DELETE >/dev/null || true
+            fi
+          fi

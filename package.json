@@ -1,0 +1,62 @@
+{
+  "name": "outcomes-optimizer",
+  "version": "1.0.0",
+  "description": "A framework for training agent capabilities through neural network-inspired learning loops.",
+  "scripts": {
+    "prepare": "husky",
+    "build": "turbo build",
+    "build:web": "pnpm -r --filter @skill-networks/logger --filter @skill-networks/agent-events --filter @skill-networks/database --filter @skill-networks/contracts --filter @duoidal/sandbox --filter @duoidal/auth --filter @skill-networks/artifact-url build",
+    "pretest": "turbo build --filter=@duoidal/cli --filter=@duoidal/sandbox --filter=@skill-networks/contracts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate": "pnpm --filter @skill-networks/database run db:migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:test": "tsx packages/database/scripts/test-connection.ts",
+    "db:rls": "tsx packages/database/scripts/apply-rls.ts",
+    "resource": "tsx packages/database/src/resources.ts",
+    "upload-asset": "tsx packages/database/src/storage/upload-asset.ts",
+    "seed:dev": "tsx scripts/seed-dev.ts",
+    "lint": "NODE_OPTIONS=--max-old-space-size=4096 eslint ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/<your-org>/outcomes-optimizer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.32.1",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/<your-org>/outcomes-optimizer/issues"
+  },
+  "homepage": "https://github.com/<your-org>/outcomes-optimizer#readme",
+  "dependencies": {
+    "@duoidal/utils": "workspace:*",
+    "@supabase/supabase-js": "^2.91.1",
+    "cron-parser": "^5.5.0",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.45.1",
+    "gray-matter": "^4.0.3",
+    "pg": "^8.20.0",
+    "postgres": "^3.4.8",
+    "yaml": "^2.8.2",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@duoidal/agent-core": "workspace:*",
+    "@duoidal/cli": "workspace:*",
+    "@rollup/rollup-linux-x64-gnu": "4.59.0",
+    "@types/node": "^25.0.9",
+    "drizzle-kit": "^0.31.8",
+    "eslint": "^9.39.4",
+    "husky": "^9.0.0",
+    "tsx": "^4.21.0",
+    "turbo": "^2.8.17",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1",
+    "vitest": "^4.0.17",
+    "@livekit/agents": "*"
+  }
+}

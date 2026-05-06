@@ -1,0 +1,76 @@
+---
+title: "Contributing and Governance"
+description: "Rules for the docs/ directory and the codebase."
+---
+
+## Docs Rules
+
+| Rule | Detail |
+|---|---|
+| No arbitrary files | Only create documentation that maps to a code component or active plan |
+| No slop folders | No `debates/`, `plans/`, `test-plans/`, `workspace/` in docs/ |
+| Mirror code structure | Utility docs live in `docs/utils/` and track real code |
+| Remove dead docs | If a document doesn't map to code or active plans, delete it |
+
+## Workspace Rules
+
+`workspace/` is ephemeral. Never commit it to main. Eval branches may contain workspace state, but main must stay clean.
+
+## Architecture Principles
+
+**Loose coupling.** Every component is blind to every other component's internals. Communicate through defined interfaces only. If any component needs to change because of how another is implemented, the interface design is wrong.
+
+**Example:** `agent-instagram` calls `fetch('https://graph.facebook.com/...')` unaware a credential proxy intercepts and injects the token. The proxy is unaware which package called it. Both work identically without the other.
+
+**Hexagonal architecture.** Packages are the core. Infrastructure is adapters. Adapters are invisible to the core.
+
+## Skills Structure
+
+Each skill is a `SKILL.md` with:
+
+```yaml
+---
+name: skill-name
+description: What this skill accomplishes
+imports: [dep-skill]
+allowed-tools: "Bash Read"
+---
+
+(body: procedure / workflow)
+
+---
+rubric:
+  check: "specific success criteria"
+  artifacts:
+    - type: link
+      spec: "URL returns 200"
+---
+```
+
+## PR Review Workflow
+
+PR review runs automatically via `.github/workflows/pr-review.yml` when a PR is opened, updated, or reopened.
+
+Two gates must pass before merge:
+
+| Gate | Tool | Threshold |
+|---|---|---|
+| Severity review | `code-reviewer` subagent | Zero CRITICAL / HIGH / MEDIUM |
+| Score review | `code-review:code-review` skill | Score ≥ 8/10 |
+
+Fixes are committed automatically. Issues with ≥60% confidence are fixed directly. Issues below 60% confidence are posted as PR comments.
+
+When both gates pass with no request-changes issues (Case A), auto-merge is enabled so the PR lands as soon as all required checks pass. Cases B and C still require human judgment before merge.
+
+## Skills Spectrum
+
+Skills exist on a spectrum from HOW (tool interfaces) to WHAT (orchestration):
+
+| Position | Description | Example | External refs? |
+|---|---|---|---|
+| HOW (tools) | Stable interfaces to external systems | `agent-browser`, `agent-email` | No |
+| HOW (impl) | Platform-specific implementations | `create-account` | Yes |
+| Mixed | Compositions of implementations | `onboard-user` | Maybe |
+| WHAT | Pure orchestration / strategy | `run-campaign` | No |
+
+HOW skills must not import WHAT skills. Keep tool interfaces stable.

@@ -1,0 +1,42 @@
+{
+  "name": "@duoidal/auth",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "default": "./dist/adapters/index.js"
+    },
+    "./token": {
+      "types": "./dist/token.d.ts",
+      "default": "./dist/token.js"
+    },
+    "./services": {
+      "types": "./dist/services/auth-db.d.ts",
+      "default": "./dist/services/auth-db.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@duoidal/utils": "workspace:*",
+    "@supabase/ssr": "^0.10.0"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  },
+  "types": "./dist/index.d.ts"
+}

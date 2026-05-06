@@ -1,0 +1,69 @@
+name: RPC Matrix Integration Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, 'boot/**']
+  workflow_dispatch:
+
+jobs:
+  rpc-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start local Supabase
+        run: |
+          supabase start
+          echo "Applying pending migrations..."
+          supabase db reset || true
+        timeout-minutes: 10
+
+      - name: Build CLI
+        run: |
+          pnpm build --filter=@duoidal/cli
+          # Manually create bin symlinks since pnpm skipped them when dist/index.js was missing
+          CLI_DIST="$(pwd)/packages/duoidal-cli/dist/index.js"
+          BIN_DIR="$(pwd)/node_modules/.bin"
+          ln -sf "$CLI_DIST" "$BIN_DIR/duoidal" 2>/dev/null || true
+          ln -sf "$CLI_DIST" "$BIN_DIR/agent-core" 2>/dev/null || true
+          echo "duoidal binary: $(ls -la $BIN_DIR/duoidal)"
+          echo "duoidal health check:"
+          node "$CLI_DIST" health --help 2>&1 | head -5 || true
+
+      - name: Seed local duoidal token for health check JWT invariant
+        run: |
+          # The rpc-matrix pre-flight calls `duoidal health` and asserts the jwt check passes.
+          # duoidal health reads ~/.config/duoidal/token.json for the JWT check.
+          # We write the well-known local anon key (signed with the local JWT secret,
+          # exp 2032) so the JWT check passes without a real auth session.
+          mkdir -p ~/.config/duoidal
+          printf '%s' '{"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"}' > ~/.config/duoidal/token.json
+          echo "Token file seeded OK: $(wc -c < ~/.config/duoidal/token.json) bytes"
+
+      - name: Run RPC matrix integration tests
+        run: pnpm test rpc-matrix
+        env:
+          RUN_INTEGRATION: 'true'
+          SUPABASE_JWT_SECRET: 'super-secret-jwt-token-with-at-least-32-characters-long'

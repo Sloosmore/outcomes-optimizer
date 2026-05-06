@@ -1,0 +1,13 @@
+workspace/
+.claude/
+.codex/
+.git/
+node_modules
+**/node_modules
+# Don't exclude services/agent-livestream/node_modules - needed for pnpm workspace resolution
+services/agent-livestream/.next/
+services/agent-livestream/dist/
+services/agent-livestream/test-results/
+*.log
+.env
+.env.*

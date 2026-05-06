@@ -1,0 +1,46 @@
+---
+title: "throwmail"
+description: "CLI for managing disposable email inboxes in agent workflows."
+---
+
+## Install
+
+```bash
+npx throwmail --help
+```
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `throwmail init` | Create a new disposable inbox |
+| `throwmail wait --from <sender>` | Wait for an email from a specific sender |
+| `throwmail extract-link` | Extract verification link from last email |
+| `throwmail list` | List received emails |
+| `throwmail send <to> <subject> <body>` | Send an email from the active inbox |
+
+## Adapters
+
+| Adapter | Description | Supports Send |
+|---|---|---|
+| `1secmail` | Disposable email via 1secmail API (default) | No |
+| `gmail` | Gmail adapter for persistent inboxes | No |
+| `mailtm` | mail.tm disposable email | No |
+| `supabase` | Supabase-backed throwmail.supa addresses | Yes |
+
+## State
+
+Session state persists in `~/.agent-email/`. Each session tracks the active inbox address and received emails.
+
+## Files
+
+```
+packages/agent-email/
+├── src/
+│   ├── commands/       # init, wait, extract-link, list
+│   ├── adapters/       # 1secmail, gmail, mailtm
+│   ├── state/          # Session state
+│   └── index.ts
+└── bin/
+    └── throwmail.js
+```

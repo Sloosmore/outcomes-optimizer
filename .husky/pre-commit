@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -e
+
+# Get staged migration files
+STAGED_MIGRATIONS=$(git diff --cached --name-only | grep '^supabase/migrations/' || true)
+
+if [ -z "$STAGED_MIGRATIONS" ]; then
+  exit 0  # No migrations staged, nothing to check
+fi
+
+# Check if any non-exempt migrations are staged
+# Exempt: files containing _rpc, _rls, _grant, or _revoke in filename
+NON_EXEMPT=$(echo "$STAGED_MIGRATIONS" | grep -v '_rpc\|_rls\|_grant\|_revoke' || true)
+
+if [ -z "$NON_EXEMPT" ]; then
+  exit 0  # All staged migrations are exempt (RPC/RLS/grant/revoke only)
+fi
+
+# Non-exempt migrations staged — require schema.ts to also be staged
+STAGED_SCHEMA=$(git diff --cached --name-only | grep 'schema\.ts' || true)
+
+if [ -z "$STAGED_SCHEMA" ]; then
+  echo "ERROR: Supabase migrations staged without schema.ts changes."
+  echo "Staged migrations:"
+  echo "$NON_EXEMPT"
+  echo ""
+  echo "Please also stage packages/database/src/schema.ts to keep Drizzle schema in sync."
+  echo "If this migration is RPC/RLS/grant/revoke only, rename it with _rpc, _rls, _grant, or _revoke to exempt it."
+  exit 1
+fi
+
+exit 0

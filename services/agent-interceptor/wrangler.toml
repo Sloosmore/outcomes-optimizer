@@ -1,0 +1,27 @@
+name = "agent-interceptor"
+main = "src/entrypoints/cloudflare.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENDPOINT_MAP = '{"instagram":"instagram","github":"github"}'
+# Per-endpoint secrets: "__SKIP__" = no verification, otherwise use that secret
+# Instagram uses global WEBHOOK_SECRET, GitHub skips verification
+ENDPOINT_SECRETS = '{"github":"__SKIP__"}'
+
+# Secrets (set via `wrangler secret put`):
+#   DOPPLER_TOKEN   — Doppler service token; all other secrets are fetched from Doppler at runtime.
+#   DOPPLER_PROJECT — Doppler project name (set via wrangler secret)
+#   DOPPLER_CONFIG  — Doppler config/environment name (set via wrangler secret)
+
+[[kv_namespaces]]
+binding = "WEBHOOK_EVENTS"
+id = "4863c7728362415d9cfcd34cedfb4fc8"
+
+[env.preview]
+name = "agent-interceptor-preview"
+
+[[env.preview.kv_namespaces]]
+binding = "WEBHOOK_EVENTS"
+id = "4863c7728362415d9cfcd34cedfb4fc8"
+preview_id = "4863c7728362415d9cfcd34cedfb4fc8"

@@ -1,0 +1,58 @@
+---
+title: "agent-media"
+description: "CLI for generating images, video, and audio in agent workflows."
+---
+
+## Install
+
+```bash
+npx agent-media --help
+```
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `agent-media image <prompt>` | Generate an image |
+| `agent-media video <prompt>` | Generate a video |
+| `agent-media audio <text>` | Generate audio (TTS) |
+| `agent-media read <file>` | Analyze media with Gemini |
+| `agent-media assemble` | Assemble clips into a final video |
+| `agent-media merge-audio` | Merge audio track into video |
+| `agent-media caption` | Add captions to video |
+
+## Common Flags
+
+| Flag | Description |
+|---|---|
+| `--output <path>` | Output file path |
+| `--dry-run` | Estimate cost without generating |
+| `--first-frame <image>` | Image-to-video: use image as first frame |
+| `--whisper-prompt <text>` | Hint for Whisper transcription timing |
+
+## Providers
+
+| Modality | Provider | Notes |
+|---|---|---|
+| Image | Gemini | Default |
+| Video (text-to-video) | Gemini Veo | Supports audio |
+| Video (image-to-video) | fal.ai | Veo 3.1 Fast, $0.15/s, supports audio |
+| Audio (TTS) | OpenAI | |
+| Media analysis | Gemini | `read` command |
+
+## Architecture
+
+Multi-registry pattern: one registry per modality. Each modality resolves its provider from the registry at runtime. Credentials are injected by the interceptor proxy — the package calls external APIs directly without awareness of the proxy layer.
+
+## Files
+
+```
+packages/agent-media/
+├── src/
+│   ├── commands/       # image, video, audio, read, assemble, etc.
+│   ├── adapters/       # Provider implementations (gemini, openai, fal)
+│   ├── state/          # Session state management
+│   └── index.ts        # CLI entry point
+└── bin/
+    └── agent-media.js
+```

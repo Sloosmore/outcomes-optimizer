@@ -1,0 +1,204 @@
+---
+title: "Database"
+description: "PostgreSQL schema plus Supabase Storage helpers for traces and public assets."
+---
+
+> **Status:** Implemented (schema + storage + upload tooling)
+
+## Tables
+
+### `traces`
+
+Execution sessions.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID | PK |
+| session_id | TEXT | unique |
+| started_at | TIMESTAMPTZ | |
+| ended_at | TIMESTAMPTZ | |
+| file_path | TEXT | path to full trace |
+| cost | NUMERIC | optional |
+| duration_ms | NUMERIC | optional |
+| analysis_status | TEXT | pending/completed |
+
+### `resources`
+
+Registry of all assets agents operate on. Supports one level of parent–child hierarchy (`app` resources parent identity/credential resources).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID | PK |
+| name | TEXT | human-readable label |
+| type | TEXT | data, identity, url, credential, config, app, skill, access-code, user, project |
+| status | TEXT | active, inactive, banned, expired, error |
+| config | JSONB | type-specific payload |
+| notes | TEXT | Free-text guidance for the agent |
+| locked_by | TEXT | Workflow/process holding exclusive checkout |
+| locked_at | TIMESTAMPTZ | When lock was acquired |
+| parent_id | UUID | FK → resources(id). Must point to an `app` row. Null = root. |
+| tags | TEXT[] | Discovery tags. GIN-indexed for `@>` queries. |
+| auth_user_id | UUID | FK → auth.users(id). Null except on `type='user'` resources. Set by `provision_user()`. Used by the `users_select_own` RLS policy. |
+
+**Tags convention:**
+
+| Resource | Tags |
+|---|---|
+| Instagram accounts | `['instagram', 'social', 'identity']` |
+| YouTube accounts | `['youtube', 'social', 'identity']` |
+| `meta-app-instagram` | `['instagram', 'meta', 'app']` |
+| `google-youtube-app` | `['youtube', 'google', 'app']` |
+
+### User provisioning
+
+`provision_user(p_auth_user_id UUID, p_email TEXT)` is a SECURITY DEFINER stored procedure called automatically by the `handle_new_auth_user` AFTER INSERT trigger on `auth.users`. It idempotently creates a `type='user'` resource and a `type='project'` resource linked by a `member_of` resource_link. Returns `(user_resource_id, project_resource_id)`.
+
+The procedure is also callable via RPC through `executeAction('provision_user', input, client)` from `utils/database/actions/execute-action.ts`. Action definitions are registered in the `action_types` table (see migration `20260329000001_action_registry.sql`). EXECUTE is revoked from PUBLIC; the trigger's SECURITY DEFINER context runs as the function owner.
+
+### `processes`
+
+Long-running optimization runs that span many epochs.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID | PK |
+| name | TEXT | unique identifier |
+| status | TEXT | pending, active, paused, waiting, completed, failed |
+| current_epoch | INTEGER | Last completed epoch number |
+| metrics | JSONB | Aggregate results across all epochs |
+| metrics_schema | JSONB | Expected keys. Null = exploratory mode. |
+| branch | TEXT | Eval branch created for this process |
+| resource_ids | UUID[] | References to resources table |
+| training_resource_id | UUID | FK → resources(id) |
+| skill_resource_id | UUID | FK → resources(id), RESTRICT on delete |
+| run_type | TEXT | cloud or local |
+| parent_process_id | UUID | FK → processes(id). Self-referencing for lineage. |
+
+### `process_dependencies`
+
+Junction table encoding the dependency graph between processes. Replaces the former `dependency_ids` array column on `processes`.
+
+| Column | Type | Notes |
+|---|---|---|
+| process_id | UUID | FK → processes(id), CASCADE on delete |
+| dependency_id | UUID | FK → processes(id), RESTRICT on delete |
+| created_at | TIMESTAMPTZ | |
+
+**Constraints (enforced by migration 0021, not expressible in Drizzle):**
+- `CHECK (process_id != dependency_id)` — prevents self-loops.
+- Trigger `prevent_dependency_cycle` — rejects inserts that would create a directed cycle (recursive CTE walk up to depth 100).
+
+**Primary key:** `(process_id, dependency_id)`
+
+**Helper functions** (`utils/database/process-dependencies.ts`):
+- `addDependency(processId, dependencyId)` — idempotent insert (ON CONFLICT DO NOTHING).
+- `getDependencies(processId)` — all processes a process waits on.
+- `getDependents(dependencyId)` — all processes waiting on a given process.
+- `removeDependency(processId, dependencyId)` — remove a single edge.
+
+### `tag_entities`
+
+Many-to-many join table associating tags with entities (resources, training sets, traces).
+
+| Column | Type | Notes |
+|---|---|---|
+| entity_id | UUID | Part of composite PK |
+| entity_type | TEXT | resource, training_set, trace |
+| tag_id | UUID | FK → tags(id), CASCADE on delete |
+
+### `epoch_results`
+
+Per-epoch execution records within a process.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID | PK |
+| campaign_id | UUID | FK → processes(id) |
+| epoch_number | INTEGER | Unique per process |
+| status | TEXT | in_progress, completed, failed, crashed |
+| metrics | JSONB | Per-epoch measurements |
+| epoch_debrief | TEXT | Agent's post-epoch reflection |
+
+### `chats`
+
+Chat sessions for agent-livestream voice and text persistence.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID | PK |
+| title | TEXT | |
+| created_at | TIMESTAMPTZ | Defaults to now() |
+
+**RLS:** `service_role_full_access` policy.
+
+### `messages`
+
+Messages within a chat session.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID | PK |
+| chat_id | UUID | FK → chats(id), CASCADE on delete |
+| role | TEXT | `user` or `assistant` (CHECK constraint enforced in DB) |
+| content | TEXT | Defaults to empty string |
+| tool_calls | JSONB | Optional tool call array |
+| created_at | TIMESTAMPTZ | Defaults to now() |
+
+**Indexes:** `(chat_id, created_at)` for chronological message fetches.
+
+**RLS:** `service_role_full_access` policy.
+
+### `logs`
+
+Structured log entries emitted by services during execution. Drained from the shared logger service. The schema is infrastructure-agnostic — it must not embed session, process, or epoch context.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID | PK |
+| level | TEXT | debug, info, warn, error, fatal |
+| service | TEXT | Emitting service name |
+| message | TEXT | Log message |
+| timestamp | TIMESTAMPTZ | Defaults to now() |
+| data | JSONB | Arbitrary structured payload |
+| error | JSONB | Error details: message, stack, code |
+
+**Indexes:** `level`, `service`, `timestamp`
+
+**RLS:** `service_role_full_access` policy — only service role can read/write.
+
+## Design Decisions
+
+| Decision | Rationale |
+|---|---|
+| One-level resource hierarchy | `app` resources parent others. Max one level — enforced at app layer. |
+| Tags for discovery | `tags text[]` with GIN index replaces JSONB config-field parsing |
+| Resource-level locking | Atomic `UPDATE ... WHERE locked_by IS NULL` |
+| Exploratory metrics | `metrics_schema` nullable — null means free-form JSONB |
+
+## Files
+
+```
+utils/database/
+├── schema.ts                 # Drizzle table definitions
+├── client.ts                 # PostgreSQL connection
+├── process-dependencies.ts   # CRUD helpers for the process_dependencies junction table
+├── resource-helpers.ts       # Constants + pure helpers for resources CLI
+├── resources.ts              # Resources CLI (add/list/update/update-status)
+├── seed-resources.ts         # One-time seed: backfill tags, insert app rows, link parent_id
+├── storage.ts                # Supabase Storage helpers (traces + public assets)
+├── upload-asset.ts           # CLI for public asset uploads
+└── test-connection.ts        # Connection test
+```
+
+## Commands
+
+```bash
+npm run db:generate       # Generate migration from schema changes
+npm run db:migrate        # Apply pending migrations
+npm run db:studio         # Open database UI
+npm run db:test           # Test connection
+npm run upload-asset <file> [folder]  # Upload public assets to Supabase
+
+# One-time seed after migration 0013:
+doppler run -- npx tsx utils/database/seed-resources.ts
+```

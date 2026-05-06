@@ -1,0 +1,67 @@
+---
+title: "Roadmap"
+description: "Project phases and milestone status."
+---
+
+*Last reviewed: 2026-02-07*
+
+## Phase 1: Core Infrastructure
+
+**Status: Complete**
+
+| Component | Status | Notes |
+|---|---|---|
+| Config System | Done | YAML config driving CLI, database, skills paths |
+| CLI Service Layer | Done | Adapters for claude-code, codex, mock |
+| Skill Sync | Done | Copy skills from `skills/` to CLI target directory |
+| GitHub Actions Workflow | Done | Headless execution with node_modules + Playwright caching |
+| First Skill | Done | `agent-browser` from vercel-labs |
+
+## Phase 2: Agent Tool CLIs
+
+| Package | Status | Notes |
+|---|---|---|
+| `agent-email` | Done | Session-based adapter, 1secmail, state in `~/.agent-email/` |
+| `agent-media` | In progress | Multi-registry (Gemini images/video, OpenAI audio) |
+| `dispatch` | Done | Interview → GOAL.md → worktree → loop |
+
+## Phase 3: Validation Framework
+
+| Component | Status |
+|---|---|
+| Substack E2E test | Planned |
+| Stray file lint | Planned |
+| Eval injection | Planned |
+
+## Phase 4: Data and Persistence
+
+| Component | Status |
+|---|---|
+| SQLite adapter | Planned |
+| PostgreSQL adapter | Planned |
+| Post-commit skill versioning | Planned |
+| Backmatter completion check | Planned |
+
+## Phase 5: Skill Ecosystem
+
+| Component | Status |
+|---|---|
+| Seed skills (Vercel registry, GitHub, local) | Planned |
+| Skill discovery + dependency graph | Planned |
+
+## Phase 6: Eval System
+
+| Component | Status | Notes |
+|---|---|---|
+| Preflight hooks | Done | Adapter-specific setup before CLI invocation |
+| Eval agent (Claude Code) | Done | Sub-agent evaluating rubric criteria |
+| Skill evals/ folder | Designed | Pre-written verifiers for deterministic checks |
+
+## Phase 7: Loop Architecture Evolution
+
+| Feature | Status |
+|---|---|
+| Sequential → DAG story execution | Planned |
+| Feature interaction coverage | Done |
+| Combinatorial test set expansion | Planned |
+| Agent teams integration | Concept |

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "69ac688134964170b983e526",
+  "colors": {
+    "primary": "#0D9373",
+    "light": "#07C983",
+    "dark": "#0D9373"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Docs",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": ["docs/overview", "docs/roadmap", "docs/contributing"]
+          },
+          {
+            "group": "Packages",
+            "pages": [
+              "docs/packages/overview",
+              "docs/packages/agent-media",
+              "docs/packages/agent-email",
+              "docs/packages/agent-core",
+              "docs/packages/agent-instagram",
+              "docs/packages/agent-youtube",
+              "docs/packages/agent-hooks",
+              "docs/packages/agent-comms"
+            ]
+          },
+          {
+            "group": "Skills",
+            "pages": [
+              "docs/skills/overview",
+              "docs/skills/dispatch",
+              "docs/skills/agent-media",
+              "docs/skills/agent-browser",
+              "docs/skills/agent-email",
+              "docs/skills/agent-instagram",
+              "docs/skills/oversight"
+            ]
+          },
+          {
+            "group": "Utils",
+            "pages": [
+              "docs/utils/database",
+              "docs/utils/config",
+              "docs/utils/linter",
+              "docs/utils/traces"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "docs/services/overview",
+              "docs/services/agent-interceptor"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

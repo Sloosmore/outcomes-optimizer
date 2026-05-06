@@ -1,0 +1,37 @@
+{
+  "name": "@skill-networks/credential-proxy",
+  "version": "0.1.0",
+  "description": "Local sidecar that intercepts outbound fetch calls, resolves credentials from the resource registry + Doppler, and injects them. Credentials never appear in the agent process environment.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts --reporter=verbose",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "credential",
+    "proxy",
+    "sidecar",
+    "doppler",
+    "security"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "@skill-networks/agent-events": "workspace:*",
+    "@skill-networks/database": "workspace:*",
+    "@skill-networks/logger": "workspace:*",
+    "drizzle-orm": "^0.45.1",
+    "postgres": "^3.4.8",
+    "socks-proxy-agent": "^8.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

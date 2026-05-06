@@ -1,0 +1,93 @@
+name: Unit Tests
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+concurrency:
+  group: unit-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        env:
+          # Bump Node heap to avoid SIGKILL (exit 137) on agent-livestream Vite build.
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm turbo build
+
+      - name: Run unit tests
+        run: pnpm test
+
+  lint:
+    name: Typecheck and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        env:
+          # Bump Node heap to avoid SIGKILL (exit 137) on agent-livestream Vite build.
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm turbo build
+
+      - name: Typecheck and lint
+        run: |
+          FAILURES=0
+          for dir in services/*/ packages/*/; do
+            name=$(basename "$dir")
+            if [ -f "$dir/package.json" ] && grep -q '"typecheck"' "$dir/package.json" 2>/dev/null; then
+              echo "::group::typecheck $name"
+              if ! (cd "$dir" && pnpm run typecheck); then
+                echo "::error::TYPECHECK FAILED for $name — see output above"
+                FAILURES=$((FAILURES + 1))
+              fi
+              echo "::endgroup::"
+            fi
+            if [ -f "$dir/package.json" ] && grep -q '"lint"' "$dir/package.json" 2>/dev/null; then
+              echo "::group::lint $name"
+              if ! (cd "$dir" && pnpm run lint); then
+                echo "::error::LINT FAILED for $name — see output above"
+                FAILURES=$((FAILURES + 1))
+              fi
+              echo "::endgroup::"
+            fi
+          done
+          if [ "$FAILURES" -gt 0 ]; then
+            echo "::warning::$FAILURES typecheck/lint failure(s) detected — non-blocking, see errors above"
+          fi

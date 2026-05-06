@@ -1,0 +1,23 @@
+{
+  "name": "@skill-networks/scheduler",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@duoidal/utils": "workspace:*",
+    "@skill-networks/database": "workspace:*",
+    "cron-parser": "^5.5.0"
+  },
+  "devDependencies": {
+    "postgres": "^3.4.7",
+    "typescript": "~5.9.3",
+    "vitest": "^2"
+  }
+}

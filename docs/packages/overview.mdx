@@ -1,0 +1,30 @@
+---
+title: "Packages Overview"
+description: "CLI tools that agents use as tools during skill execution."
+---
+
+Packages live in `packages/`. Each is a standalone CLI installable via `npx`. Agents call them as tools inside skills.
+
+## Available Packages
+
+| Package | Command | Purpose |
+|---|---|---|
+| `agent-media` | `npx agent-media` | Generate images, video, and audio via Gemini / OpenAI |
+| `agent-email` | `npx throwmail` | Manage disposable inboxes for agent workflows |
+| `agent-instagram` | `npx agent-instagram` | Post to Instagram via the Graph API |
+| `agent-youtube` | `npx agent-youtube` | Upload and manage YouTube videos |
+| `agent-comms` | `npx agent-comms` | Cross-channel communication utilities |
+| `agent-core` | `npx agent-core` | Resource discovery, process management, epoch tracking |
+| `agent-hooks` | `npx agent-hooks` | Git hook management |
+
+## Design Constraints
+
+- Each package is a standalone CLI. No package imports from another package.
+- Credential injection happens via infrastructure (interceptor proxy), not inside the package.
+- Packages call external APIs directly. They are unaware of any proxy layer.
+- `--help` is the primary reference for CLI usage — always check it before use.
+
+```bash
+npx agent-media --help
+npx throwmail --help
+```

@@ -1,0 +1,31 @@
+---
+title: "agent-media (skill)"
+description: "Skill documentation for the media generation capability."
+---
+
+## Purpose
+
+Provides procedures for generating images, video, and audio for content workflows. Covers prompt construction, provider selection, cost estimation, and pipeline assembly.
+
+## Backed By
+
+The `agent-media` CLI package. See [agent-media package](/docs/packages/agent-media) for CLI reference.
+
+## Standard Pipeline
+
+```
+image → silent video (--first-frame) + TTS audio → merge-audio → caption → assemble → post
+```
+
+## Key Notes
+
+- Veo image-to-video on Gemini developer API produces silent video (no audio).
+- fal.ai is the provider for image-to-video WITH audio (Veo 3.1 Fast, $0.15/s).
+- `--whisper-prompt` passes the known TTS script for near-perfect Whisper timing.
+
+## Files
+
+```
+skills/agent-media/
+└── SKILL.md
+```

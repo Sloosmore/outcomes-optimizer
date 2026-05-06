@@ -1,0 +1,43 @@
+---
+title: "agent-instagram"
+description: "CLI for posting to Instagram via the Meta Graph API."
+---
+
+## Install
+
+```bash
+npx agent-instagram --help
+```
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `agent-instagram post <media>` | Post image or video to Instagram |
+| `agent-instagram status` | Check account connection status |
+
+## Architecture
+
+Calls `https://graph.facebook.com/...` directly. Credentials are injected by the `agent-interceptor` proxy at the infrastructure layer. The package has no awareness of credential injection.
+
+## Account Management
+
+Two Instagram accounts are in use:
+
+| Account | Role |
+|---|---|
+| Burner / test account | Experiments — post freely |
+| Primary account | Validated content only |
+
+**IP consistency requirement:** Each account must always connect from the same geographic IP. The proxy layer (not this package) handles IP selection — see [agent-interceptor](/docs/services/agent-interceptor).
+
+## Files
+
+```
+packages/agent-instagram/
+├── src/
+│   ├── commands/
+│   └── index.ts
+└── bin/
+    └── agent-instagram.js
+```
